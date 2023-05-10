@@ -1,4 +1,4 @@
-use std::{ops::Add, rc::Rc};
+use std::rc::Rc;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Shape {
@@ -6,6 +6,7 @@ pub struct Shape {
     pub(super) strides: Vec<usize>,
 }
 
+// TODO: always inline few methods
 impl Shape {
     pub fn new(shape: Vec<usize>) -> Self {
         // Compute default array strides
@@ -23,13 +24,54 @@ impl Shape {
         Shape { shape, strides }
     }
 
+    pub(crate) fn empty() -> Self {
+        Self {
+            shape: vec![],
+            strides: vec![],
+        }
+    }
+
+    fn is_valid_index(&self, index: &[usize]) -> bool {
+        !self.shape.is_empty() && index.iter().zip(self.shape.iter()).all(|(i, s)| i < s)
+    }
+
+    pub(crate) fn squeeze(&self) -> Self {
+        let mut shape = Vec::with_capacity(self.ndim());
+        let mut strides = Vec::with_capacity(self.ndim());
+        for (&dim, &stride) in self.shape.iter().zip(self.strides.iter()) {
+            if dim != 1 {
+                shape.push(dim);
+                strides.push(stride);
+            }
+        }
+        Self { shape, strides }
+    }
+
+    pub(crate) fn permute(&self, perm_shape: &[usize]) -> Self {
+        let mut shape = Vec::with_capacity(self.ndim());
+        let mut strides = Vec::with_capacity(self.ndim());
+        for &i in perm_shape {
+            shape.push(self.shape[i]);
+            strides.push(self.strides[i]);
+        }
+        Self { shape, strides }
+    }
+
+    pub fn shape(&self) -> &[usize] {
+        &self.shape
+    }
+
+    pub fn stride(&self) -> &[usize] {
+        &self.strides
+    }
+
     pub fn ndim(&self) -> usize {
         self.shape.len()
     }
 
     // TODO: make this a field so we don't have to calculate every time?
     pub fn numel(&self) -> usize {
-        self.shape.iter().fold(1, |acc, &i| acc * i)
+        self.shape.iter().product()
     }
 
     pub fn remove_dim(&mut self) {}
@@ -45,6 +87,7 @@ pub trait RawTensor {
     type Elem: num_traits::Float;
 }
 
+// use T as num_traits::Num?
 #[derive(Debug, PartialEq, Eq)]
 pub struct Tensor<T: num_traits::Float> {
     data: Rc<Vec<T>>,
@@ -70,7 +113,12 @@ impl<T: num_traits::Float> Tensor<T> {
 
     pub fn from_shape(shape: Shape, data: Vec<T>) -> Self {
         // TODO: return error if len(data) != shape.numel()
-        assert_eq!(data.len(), shape.numel());
+        assert!(
+            data.len() == shape.numel(),
+            "Number of elements should be same in data buffer({}) and shape({}).",
+            data.len(),
+            shape.numel()
+        );
         Self {
             data: Rc::new(data),
             shape,
