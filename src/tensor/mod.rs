@@ -138,24 +138,41 @@ impl From<Vec<usize>> for Shape {
     }
 }
 
-pub trait RawTensor {
-    type Elem: num_traits::Float;
-}
-
 // use T as num_traits::Num?
-#[derive(Debug, PartialEq, Eq)]
+#[derive(PartialEq, Eq)]
 pub struct Tensor<T: num_traits::Float> {
     data: Rc<Vec<T>>,
     shape: Shape,
 }
 
+impl<T: num_traits::Float> Display for Tensor<T> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "Tensor with shape {:?}", self.shape.shape)
+    }
+}
+
+impl<T: num_traits::Float> Debug for Tensor<T> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "Tensor with shape: {:?} and stride: {:?}",
+            self.shape.shape, self.shape.strides
+        )
+    }
+}
+
 // TODO: make data a lifetime field?
+// TODO: support scalar Tensor
+// TODO: add messages to asserts
+// TODO: how do we really want Eq and PartialEq to work
+// TOOD: replace asserts w Result type?
 // assert that the type of tensor is always a number
 /// we only support channel last memory format
 /// see https://pytorch.org/blog/tensor-memory-format-matters for details
 
 impl<T: num_traits::Float> Tensor<T> {
-    pub fn from_data(data: Vec<T>) -> Self {
+    // TODO: change arg type to Into<Shape>?
+    pub fn new(data: Vec<T>) -> Self {
         let shape = Shape {
             shape: [data.len()].into(),
             strides: [1].into(),
@@ -166,24 +183,47 @@ impl<T: num_traits::Float> Tensor<T> {
         }
     }
 
-    pub fn from_shape(shape: Shape, data: Vec<T>) -> Self {
-        // TODO: return error if len(data) != shape.numel()
-        assert!(
-            data.len() == shape.numel(),
-            "Number of elements should be same in data buffer({}) and shape({}).",
-            data.len(),
-            shape.numel()
+    // TODO: make the argument Into<Shape> and calculate stride ourselves
+    pub fn view(&mut self, shape: Shape) {
+        // TODO: create macro or helpers for asserting numels
+        assert_eq!(
+            self.shape.numel(),
+            shape.numel(),
+            "shape {:?} is invalid for input of size {}.",
+            shape.shape,
+            self.shape.numel()
         );
-        Self {
-            data: Rc::new(data),
+        self.shape = shape;
+    }
+
+    pub fn reshape(&self, shape: Shape) -> Self {
+        assert_eq!(
+            self.shape.numel(),
+            shape.numel(),
+            "shape {:?} is invalid for input of size {}.",
+            shape.shape,
+            self.shape.numel()
+        );
+        Tensor {
+            data: Rc::clone(&self.data),
             shape,
         }
     }
 
-    // TODO: make the argument Into<Shape> and calculate stride ourselves
-    pub fn view(&mut self, shape: Shape) {
-        assert_eq!(shape.numel(), self.shape.numel());
-        self.shape = shape;
+    pub fn permute(&self, dims: &[usize]) -> Self {
+        let shape = self.shape.permute(dims);
+        Self {
+            data: Rc::clone(&self.data),
+            shape,
+        }
+    }
+
+    pub fn transpose(&self, dim_1: usize, dim_2: usize) -> Self {
+        let shape = self.shape.transpose(dim_1, dim_2);
+        Self {
+            data: Rc::clone(&self.data),
+            shape,
+        }
     }
 
     // TODO: this will be moved to backend in the future
@@ -197,7 +237,7 @@ impl<T: num_traits::Float> Tensor<T> {
             }
             None => {
                 let sum = [self.data.iter().fold(T::zero(), |acc, x| acc + *x)].into();
-                Self::from_data(sum)
+                Self::new(sum)
             }
         }
     }
@@ -206,26 +246,46 @@ impl<T: num_traits::Float> Tensor<T> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::borrow::Borrow;
 
     #[test]
     fn test_shape() {
-        let shape: Shape = vec![2, 2, 5].into();
-        assert_eq!(shape.numel(), 2 * 2 * 5);
-        assert_eq!(shape.shape.borrow(), [2, 2, 5]);
-        assert_eq!(shape.strides.borrow(), [10, 5, 1]);
+        let shape_vec = vec![3, 2, 5, 1];
+        let shape: Shape = shape_vec.clone().into();
+        let empty_shape = Shape::empty();
+
+        assert_eq!(shape.shape(), &shape_vec);
+        assert_eq!(shape.stride(), &[10, 5, 1, 1]);
+        assert_eq!(shape.ndim(), 4);
+        assert_eq!(shape.numel(), shape_vec.iter().product());
+        assert_eq!(shape.is_valid_index(&[2, 1, 3, 0]), true);
+        // TODO: make sure the length matches
+        // TODO: test for failure - assert_eq!(shape.is_valid_index(&[1, 3, 0]), &[2, 5, 1]);
+
+        let remove_shape = shape.remove_dim(1);
+        assert_eq!(remove_shape.shape(), &[3, 5, 1]);
+        assert_eq!(remove_shape.stride(), &[5, 1, 1]);
+        // TODO: increase dim and expect it to fail - assert_eq!(shape.remove_dim(1), shape_vec.iter().product());
+
+        let squeeze_shape = shape.squeeze();
+        assert_eq!(squeeze_shape.shape(), &[3, 2, 5]);
+        assert_eq!(squeeze_shape.stride(), &[10, 5, 1]);
+
+        let perm_shape = shape.permute(&[3, 2, 1, 0]);
+        assert_eq!(perm_shape.shape(), &[1, 5, 2, 3]);
+        // TODO: test stride
     }
 
     #[test]
     fn test_tensor() {
         let shape: Shape = vec![2, 2, 2].into();
         let data = vec![1.0; 2 * 2 * 2];
-        let tensor: Tensor<f32> = Tensor::from_shape(shape, data);
+        let tensor: Tensor<f32> = Tensor::new(data).reshape(shape);
         let sum_tensor = tensor.sum(None);
-        let sum_tensor_check: Tensor<f32> = Tensor::from_data([8.0].into());
-        dbg!(&sum_tensor);
+        let sum_tensor_check: Tensor<f32> = Tensor::new([8.0].into());
+
         assert_eq!(sum_tensor, sum_tensor_check);
 
+        // dbg!(&sum_tensor);
         // assert!(false);
         // TODO: assert that this is actually equal to a 3d tensor
         assert_eq!(
