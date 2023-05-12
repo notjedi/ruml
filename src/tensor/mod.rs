@@ -1,9 +1,12 @@
-use std::rc::Rc;
+use std::{
+    fmt::{Debug, Display},
+    rc::Rc,
+};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Shape {
-    pub(super) shape: Vec<usize>,
-    pub(super) strides: Vec<usize>,
+    pub(crate) shape: Vec<usize>,
+    pub(crate) strides: Vec<usize>,
 }
 
 // TODO: always inline few methods
@@ -12,49 +15,24 @@ impl Shape {
         // Compute default array strides
         // Shape (a, b, c) => Give strides (b * c, c, 1)
         // Right now, we only support row major stride by default
-        // TODO: return error if any of the elems in dim is 0
+        assert!(!shape.is_empty(), "shape should not be an empty vec");
+        assert!(
+            !shape.iter().any(|x| *x == 0),
+            "{:?} should not contain 0",
+            shape
+        );
+
         let mut strides = vec![1; shape.len()];
-        let stride_it = strides.iter_mut().rev();
         let mut cum_prod = 1;
-        for (st, sh) in stride_it.zip(shape.iter().rev()) {
-            *st = cum_prod;
-            cum_prod *= sh;
-        }
-
+        strides
+            .iter_mut()
+            .rev()
+            .zip(shape.iter().rev())
+            .for_each(|(st, sh)| {
+                *st = cum_prod;
+                cum_prod *= sh;
+            });
         Shape { shape, strides }
-    }
-
-    pub(crate) fn empty() -> Self {
-        Self {
-            shape: vec![],
-            strides: vec![],
-        }
-    }
-
-    fn is_valid_index(&self, index: &[usize]) -> bool {
-        !self.shape.is_empty() && index.iter().zip(self.shape.iter()).all(|(i, s)| i < s)
-    }
-
-    pub(crate) fn squeeze(&self) -> Self {
-        let mut shape = Vec::with_capacity(self.ndim());
-        let mut strides = Vec::with_capacity(self.ndim());
-        for (&dim, &stride) in self.shape.iter().zip(self.strides.iter()) {
-            if dim != 1 {
-                shape.push(dim);
-                strides.push(stride);
-            }
-        }
-        Self { shape, strides }
-    }
-
-    pub(crate) fn permute(&self, perm_shape: &[usize]) -> Self {
-        let mut shape = Vec::with_capacity(self.ndim());
-        let mut strides = Vec::with_capacity(self.ndim());
-        for &i in perm_shape {
-            shape.push(self.shape[i]);
-            strides.push(self.strides[i]);
-        }
-        Self { shape, strides }
     }
 
     pub fn shape(&self) -> &[usize] {
@@ -69,12 +47,89 @@ impl Shape {
         self.shape.len()
     }
 
-    // TODO: make this a field so we don't have to calculate every time?
     pub fn numel(&self) -> usize {
         self.shape.iter().product()
     }
 
-    pub fn remove_dim(&mut self) {}
+    // TODO: should i make this inplace?
+    // Removes a dimension from the shape. For eg, let's say we want remove the dimension 1 from
+    // the shape [x, y, z]. This method turns the shape [x, y, z] => [x, z] with appropriate strides.
+    pub(crate) fn remove_dim(&self, dim: usize) -> Self {
+        assert!(
+            dim < self.ndim(),
+            "{} should be within the range of 0 <= dim < {}",
+            dim,
+            self.ndim()
+        );
+        let mut shape = self.shape.clone();
+        shape.remove(dim);
+        Shape::new(shape)
+    }
+
+    pub(crate) fn empty() -> Self {
+        Self {
+            shape: vec![],
+            strides: vec![],
+        }
+    }
+
+    pub(crate) fn is_valid_index(&self, index: &[usize]) -> bool {
+        // TODO: should the len of index be equal to self.shape.len()?
+        !index.is_empty()
+            && index.len() <= self.shape.len()
+            && index.iter().zip(self.shape.iter()).all(|(i, s)| i < s)
+    }
+
+    pub(crate) fn squeeze(&self) -> Self {
+        // TODO: what if the shape is [1, 1, 1] and when squeezing the shape would be empty vec
+        let mut shape = Vec::with_capacity(self.ndim());
+        let mut strides = Vec::with_capacity(self.ndim());
+        self.shape
+            .iter()
+            .zip(self.strides.iter())
+            .for_each(|(&dim, &stride)| {
+                if dim != 1 {
+                    shape.push(dim);
+                    strides.push(stride);
+                }
+            });
+        Self { shape, strides }
+    }
+
+    pub(crate) fn permute(&self, perm_shape: &[usize]) -> Self {
+        // a clever way to check for duplicate elements, exploiting the fact that the elements
+        // should be consecutive https://github.com/kurtschelfthout/tensorken/blob/main/src/shape_strider.rs#L213
+        assert_eq!(
+            (perm_shape.len() * (perm_shape.len() - 1)) / 2,
+            perm_shape.iter().sum(),
+            "all dims must be specified exactly once"
+        );
+        assert!(
+            perm_shape.iter().all(|x| *x < self.ndim()),
+            "All dimensions should be less than {}",
+            self.ndim()
+        );
+        let mut shape = Vec::with_capacity(self.ndim());
+        let mut strides = Vec::with_capacity(self.ndim());
+        perm_shape.iter().for_each(|i| {
+            shape.push(self.shape[*i]);
+            strides.push(self.strides[*i]);
+        });
+        Self { shape, strides }
+    }
+
+    pub(crate) fn transpose(&self, dim_1: usize, dim_2: usize) -> Self {
+        assert!(
+            dim_1 < self.ndim() && dim_2 < self.ndim(),
+            "both dim_1({}) and dim_2({}) should be less than {}",
+            dim_1,
+            dim_2,
+            self.ndim()
+        );
+        let mut new_dims = (0..self.ndim()).collect::<Vec<usize>>();
+        new_dims.swap(dim_1, dim_2);
+        self.permute(&new_dims)
+    }
 }
 
 impl From<Vec<usize>> for Shape {

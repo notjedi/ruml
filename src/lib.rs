@@ -1,5 +1,8 @@
-pub mod backend;
-pub mod tensor;
+mod backend;
+mod tensor;
+
+pub use backend::*;
+pub use tensor::*;
 
 // List of ops taken from:
 // 1. https://github.com/geohot/tinygrad/blob/master/tinygrad/ops.py
