@@ -99,11 +99,7 @@ impl Shape {
         );
         let mut shape = self.shape.clone();
         shape.remove(dim);
-
-        let mut strides = self.strides.clone();
-        strides.remove(dim);
-
-        Shape { shape, strides }
+        Shape::new(shape)
     }
 
     pub(crate) fn squeeze(&self) -> Self {
@@ -211,7 +207,6 @@ impl From<Vec<usize>> for Shape {
 pub struct Tensor<T: num_traits::Float> {
     data: Rc<Vec<T>>,
     shape: Shape,
-    offset: usize,
 }
 
 impl<T: num_traits::Float> Display for Tensor<T> {
@@ -249,7 +244,6 @@ impl<T: num_traits::Float + num_traits::NumAssignOps> Tensor<T> {
         Self {
             data: Rc::new(data),
             shape,
-            offset: 0,
         }
     }
 
@@ -258,7 +252,6 @@ impl<T: num_traits::Float + num_traits::NumAssignOps> Tensor<T> {
         Self {
             data: Rc::new(data),
             shape: Shape::from_len(len),
-            offset: 0,
         }
     }
 
@@ -267,7 +260,6 @@ impl<T: num_traits::Float + num_traits::NumAssignOps> Tensor<T> {
         Self {
             data: Rc::new(data),
             shape: Shape::from_len(len),
-            offset: 0,
         }
     }
 
@@ -276,18 +268,12 @@ impl<T: num_traits::Float + num_traits::NumAssignOps> Tensor<T> {
         Self {
             data: Rc::new(data),
             shape: Shape::from_len(len),
-            offset: 0,
         }
     }
 
     #[inline(always)]
     pub fn shape(&self) -> &[usize] {
         self.shape.shape()
-    }
-
-    #[inline(always)]
-    pub fn stride(&self) -> &[usize] {
-        self.shape.stride()
     }
 
     // TODO: make the argument Into<Shape> and calculate stride ourselves
@@ -323,7 +309,6 @@ impl<T: num_traits::Float + num_traits::NumAssignOps> Tensor<T> {
         Tensor {
             data: Rc::clone(&self.data),
             shape,
-            offset: 0,
         }
     }
 
@@ -332,7 +317,6 @@ impl<T: num_traits::Float + num_traits::NumAssignOps> Tensor<T> {
         Self {
             data: Rc::clone(&self.data),
             shape,
-            offset: 0,
         }
     }
 
@@ -341,17 +325,10 @@ impl<T: num_traits::Float + num_traits::NumAssignOps> Tensor<T> {
         Self {
             data: Rc::clone(&self.data),
             shape,
-            offset: 0,
         }
     }
 
-    pub fn dim_iter(&self, dim: usize) -> DimIterator<T> {
-        DimIterator {
-            tensor: self,
-            iter_dim: dim,
-            dim_idx: 0,
-        }
-    }
+    pub fn dim_iter(&self, dim: usize) {}
 
     // TODO: this will be moved to backend in the future
     // TODO: what should be the type of axis?
@@ -390,38 +367,36 @@ pub struct TensorIterator<'a, T: num_traits::Float + num_traits::NumAssignOps> {
     index_iter: TensorIndexIterator<'a>,
 }
 
-impl<'a, T: num_traits::Float + num_traits::NumAssignOps> Iterator for TensorIterator<'a, T> {
-    type Item = T;
-
-    fn next(&mut self) -> Option<Self::Item> {
-        self.index_iter.next().map(|index| {
-            self.tensor.data[self.tensor.offset + self.tensor.shape.get_buffer_idx(index)]
-        })
-    }
-}
-
 #[derive(Debug)]
-pub struct DimIterator<'a, T: num_traits::Float + num_traits::NumAssignOps> {
-    tensor: &'a Tensor<T>,
-    iter_dim: usize,
-    dim_idx: usize,
+pub struct DimIterator<T: num_traits::Float + num_traits::NumAssignOps> {
+    tensor: Tensor<T>,
+    dim: usize,
+    cur_dim: usize,
 }
 
 impl<'a, T: num_traits::Float + num_traits::NumAssignOps> Iterator for DimIterator<'a, T> {
     type Item = Tensor<T>;
 
     fn next(&mut self) -> Option<Self::Item> {
-        if self.dim_idx >= self.tensor.shape()[self.iter_dim] {
-            return None;
+        if self.cur_dim >= self.tensor.shape()[dim] {
+
         }
-        let offset = self.tensor.stride()[self.iter_dim] * self.dim_idx;
-        self.dim_idx += 1;
-        let tensor = Tensor {
+
+        self.tensor.set
+        Some(Tensor {
             data: Rc::clone(&self.tensor.data),
-            shape: self.tensor.shape.remove_dim(self.iter_dim),
-            offset,
-        };
-        Some(tensor)
+            shape: self.shape.clone(),
+        })
+    }
+}
+
+impl<'a, T: num_traits::Float + num_traits::NumAssignOps> Iterator for TensorIterator<'a, T> {
+    type Item = T;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        self.index_iter
+            .next()
+            .map(|index| self.tensor.data[self.tensor.shape.get_buffer_idx(index)])
     }
 }
 
@@ -443,7 +418,7 @@ mod tests {
 
         let remove_shape = shape.remove_dim(1);
         assert_eq!(remove_shape.shape(), &[3, 5, 1]);
-        assert_eq!(remove_shape.stride(), &[10, 1, 1]);
+        assert_eq!(remove_shape.stride(), &[5, 1, 1]);
 
         let squeeze_shape = shape.squeeze();
         assert_eq!(squeeze_shape.shape(), &[3, 2, 5]);
@@ -500,41 +475,6 @@ mod tests {
             .for_each(|(i, (iter, &vec))| {
                 assert_eq!(iter, vec, "values differ at {i}");
             });
-    }
-
-    #[test]
-    fn test_dim_iter() {
-        let shape: Shape = vec![1, 2, 3].into();
-        let arange_tensor: Tensor<f32> = Tensor::arange(shape.numel()).reshape(shape.clone());
-
-        // should return the following elements [0, 1, 2, 3, 4, 5]
-        for dim_tensor in arange_tensor.dim_iter(0) {
-            // dbg!(dim_tensor.into_iter().collect::<Vec<_>>().as_slice());
-            assert_eq!(
-                dim_tensor.into_iter().collect::<Vec<_>>().as_slice(),
-                vec![0.0, 1.0, 2.0, 3.0, 4.0, 5.0]
-            );
-        }
-
-        // should return the following elements [[0, 1, 2], [3, 4, 5]]
-        let mut num = 0.0;
-        for dim_tensor in arange_tensor.dim_iter(1) {
-            // dbg!(dim_tensor.into_iter().collect::<Vec<_>>().as_slice());
-            assert_eq!(
-                dim_tensor.into_iter().collect::<Vec<_>>().as_slice(),
-                vec![num, num + 1.0, num + 2.0]
-            );
-            num += 3.0;
-        }
-
-        // should return the following elements [[0, 3], [1, 4], [2, 5]]
-        for (i, dim_tensor) in arange_tensor.dim_iter(2).enumerate() {
-            // dbg!(dim_tensor.into_iter().collect::<Vec<_>>().as_slice());
-            assert_eq!(
-                dim_tensor.into_iter().collect::<Vec<_>>().as_slice(),
-                vec![i as f32, i as f32 + 3.0]
-            );
-        }
     }
 
     #[test]
