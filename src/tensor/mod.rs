@@ -35,6 +35,13 @@ impl Shape {
         Shape { shape, strides }
     }
 
+    pub(crate) fn from_len(len: usize) -> Self {
+        Shape {
+            shape: [len].into(),
+            strides: [1].into(),
+        }
+    }
+
     pub(crate) fn empty() -> Self {
         Self {
             shape: vec![],
@@ -147,6 +154,7 @@ impl Shape {
     }
 }
 
+#[derive(Debug)]
 pub(crate) struct TensorIndexIterator<'a> {
     shape: &'a Shape,
     index: Vec<usize>,
@@ -224,7 +232,7 @@ impl<T: num_traits::Float> Debug for Tensor<T> {
 /// we only support channel last memory format
 /// see https://pytorch.org/blog/tensor-memory-format-matters for details
 
-impl<T: num_traits::Float> Tensor<T> {
+impl<T: num_traits::Float + num_traits::NumAssignOps> Tensor<T> {
     // TODO: change arg type to Into<Shape>?
     pub fn new(data: Vec<T>) -> Self {
         let shape = Shape {
@@ -235,6 +243,41 @@ impl<T: num_traits::Float> Tensor<T> {
             data: Rc::new(data),
             shape,
         }
+    }
+
+    pub fn ones(len: usize) -> Self {
+        let data = vec![T::one(); len];
+        Self {
+            data: Rc::new(data),
+            shape: Shape::from_len(len),
+        }
+    }
+
+    pub fn zeros(len: usize) -> Self {
+        let data = vec![T::zero(); len];
+        Self {
+            data: Rc::new(data),
+            shape: Shape::from_len(len),
+        }
+    }
+
+    pub fn arange(len: usize) -> Self {
+        let mut data = vec![];
+        let mut num = T::zero();
+
+        (0..len).for_each(|_| {
+            data.push(num);
+            num += T::one();
+            // num = num.add(T::one());
+        });
+        Self {
+            data: Rc::new(data),
+            shape: Shape::from_len(len),
+        }
+    }
+
+    pub fn shape(&self) -> &[usize] {
+        self.shape.shape()
     }
 
     // TODO: make the argument Into<Shape> and calculate stride ourselves
@@ -248,6 +291,15 @@ impl<T: num_traits::Float> Tensor<T> {
             self.shape.numel()
         );
         self.shape = shape;
+    }
+
+    #[inline(always)]
+    pub fn flatten(&self) -> Self {
+        let shape = Shape {
+            shape: vec![self.shape.numel()],
+            strides: vec![1],
+        };
+        self.reshape(shape)
     }
 
     pub fn reshape(&self, shape: Shape) -> Self {
@@ -297,7 +349,7 @@ impl<T: num_traits::Float> Tensor<T> {
     }
 }
 
-impl<'a, T: num_traits::Float> IntoIterator for &'a Tensor<T> {
+impl<'a, T: num_traits::Float + num_traits::NumAssignOps> IntoIterator for &'a Tensor<T> {
     type Item = T;
     type IntoIter = TensorIterator<'a, T>;
 
@@ -309,12 +361,13 @@ impl<'a, T: num_traits::Float> IntoIterator for &'a Tensor<T> {
     }
 }
 
-pub struct TensorIterator<'a, T: num_traits::Float> {
+#[derive(Debug)]
+pub struct TensorIterator<'a, T: num_traits::Float + num_traits::NumAssignOps> {
     tensor: &'a Tensor<T>,
     index_iter: TensorIndexIterator<'a>,
 }
 
-impl<'a, T: num_traits::Float> Iterator for TensorIterator<'a, T> {
+impl<'a, T: num_traits::Float + num_traits::NumAssignOps> Iterator for TensorIterator<'a, T> {
     type Item = T;
 
     fn next(&mut self) -> Option<Self::Item> {
@@ -364,12 +417,41 @@ mod tests {
     #[test]
     fn test_tensor() {
         let shape: Shape = vec![2, 2, 2].into();
-        let data = vec![1.0; 2 * 2 * 2];
-        let tensor: Tensor<f32> = Tensor::new(data).reshape(shape);
+        let ones_tensor: Tensor<f32> = Tensor::ones(shape.numel()).reshape(shape.clone());
+        assert_eq!(ones_tensor.shape(), shape.shape());
+        assert_eq!(ones_tensor.data.len(), shape.numel());
         assert_eq!(
-            tensor.data.as_slice(),
-            [1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0]
+            ones_tensor.data.as_slice(),
+            [1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0],
+            "elements don't match for the Tensor::ones tensor"
         );
+
+        let zeros_tensor: Tensor<f32> = Tensor::zeros(shape.numel()).reshape(shape.clone());
+        assert_eq!(zeros_tensor.data.len(), shape.numel());
+        assert_eq!(zeros_tensor.shape(), shape.shape());
+        assert_eq!(
+            zeros_tensor.data.as_slice(),
+            [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
+            "elements don't match for the Tensor::zeros tensor"
+        );
+
+        let arange_tensor: Tensor<f32> = Tensor::arange(shape.numel()).reshape(shape.clone());
+        assert_eq!(arange_tensor.data.len(), shape.numel());
+        assert_eq!(arange_tensor.shape(), shape.shape());
+        assert_eq!(
+            arange_tensor.data.as_slice(),
+            [0.0, 1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0],
+            "elements don't match for the Tensor::arange tensor"
+        );
+
+        // test iterator
+        ones_tensor
+            .into_iter()
+            .zip(ones_tensor.data.iter())
+            .enumerate()
+            .for_each(|(i, (iter, &vec))| {
+                assert_eq!(iter, vec, "values differ at {i}");
+            });
     }
 
     #[test]
