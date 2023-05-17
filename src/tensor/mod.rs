@@ -69,6 +69,15 @@ impl Shape {
         self.shape.iter().product()
     }
 
+    #[inline(always)]
+    pub(crate) fn is_valid_index(&self, index: &[usize]) -> bool {
+        // TODO: should the len of index be equal to self.shape.len()?
+        !index.is_empty()
+            // && !self.shape.is_empty() // rendered redundant by the next check
+            && index.len() <= self.shape.len()
+            && index.iter().zip(self.shape.iter()).all(|(i, s)| i < s)
+    }
+
     pub(crate) fn get_buffer_idx(&self, index: Vec<usize>) -> usize {
         // TODO: should i assert that the length of both the index vec and that of the strides vec
         // is same?
@@ -77,15 +86,6 @@ impl Shape {
             .zip(self.strides.iter())
             .map(|(&idx, &stride)| idx * stride)
             .sum::<usize>()
-    }
-
-    #[inline(always)]
-    pub(crate) fn is_valid_index(&self, index: &[usize]) -> bool {
-        // TODO: should the len of index be equal to self.shape.len()?
-        !index.is_empty()
-            // && !self.shape.is_empty() // rendered redundant by the next check
-            && index.len() <= self.shape.len()
-            && index.iter().zip(self.shape.iter()).all(|(i, s)| i < s)
     }
 
     // Removes a dimension from the shape. For eg, let's say we want remove the dimension 1 from
@@ -262,20 +262,14 @@ impl<T: num_traits::Float + num_traits::NumAssignOps> Tensor<T> {
     }
 
     pub fn arange(len: usize) -> Self {
-        let mut data = vec![];
-        let mut num = T::zero();
-
-        (0..len).for_each(|_| {
-            data.push(num);
-            num += T::one();
-            // num = num.add(T::one());
-        });
+        let data = (0..len).map(|i| T::from(i).unwrap()).collect::<Vec<_>>();
         Self {
             data: Rc::new(data),
             shape: Shape::from_len(len),
         }
     }
 
+    #[inline(always)]
     pub fn shape(&self) -> &[usize] {
         self.shape.shape()
     }
@@ -408,7 +402,7 @@ mod tests {
 
     #[test]
     #[should_panic]
-    fn test_shape_panic() {
+    fn test_shape_remove_dim() {
         let shape_vec = vec![3, 2, 5, 1];
         let shape: Shape = shape_vec.clone().into();
         shape.remove_dim(4);
