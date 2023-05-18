@@ -40,14 +40,6 @@ impl Shape {
         }
     }
 
-    pub(crate) fn from_len(len: usize) -> Self {
-        Shape {
-            shape: [len].into(),
-            strides: [1].into(),
-            offset: 0,
-        }
-    }
-
     #[inline]
     pub fn shape(&self) -> &[usize] {
         &self.shape
@@ -66,6 +58,15 @@ impl Shape {
     #[inline]
     pub fn numel(&self) -> usize {
         self.shape.iter().product()
+    }
+
+    #[inline]
+    pub(crate) fn from_len(len: usize) -> Self {
+        Shape {
+            shape: [len].into(),
+            strides: [1].into(),
+            offset: 0,
+        }
     }
 
     #[inline]
@@ -114,12 +115,9 @@ impl Shape {
         let mut reduced_shape = self.shape.clone();
         reduced_shape[dim] = 1;
         let mut reduced_shape = Shape::new(reduced_shape);
+        // TODO: it is okay for a stride to be 0? think of a case where it might fail
         reduced_shape.strides[dim] = 0;
         reduced_shape
-
-        // let mut reducer = reduced_shape.clone();
-        // reducer.strides[dim] = 0;
-        // (reduced_shape, reducer)
     }
 
     pub(crate) fn squeeze(&self) -> Self {
@@ -263,7 +261,8 @@ impl<T: crate::Num> Debug for Tensor<T> {
 // TODO: get around to implement mut iter for tensor
 // TODO: replace asserts w Result type or debug_assert?
 /// we only support channel last memory format
-/// see https://pytorch.org/blog/tensor-memory-format-matters for details
+/// see <https://pytorch.org/blog/tensor-memory-format-matters> for details
+/// <https://ajcr.net/stride-guide-part-1>
 
 impl<T: crate::Num> Tensor<T> {
     // TODO: change arg type to Into<Shape>?
@@ -279,8 +278,8 @@ impl<T: crate::Num> Tensor<T> {
         }
     }
 
-    pub fn ones(len: usize) -> Self {
-        let data = vec![T::one(); len];
+    pub fn arange(len: usize) -> Self {
+        let data = (0..len).map(|i| T::from(i).unwrap()).collect::<Vec<_>>();
         Self {
             data: Rc::new(data),
             shape: Shape::from_len(len),
@@ -295,11 +294,29 @@ impl<T: crate::Num> Tensor<T> {
         }
     }
 
-    pub fn arange(len: usize) -> Self {
-        let data = (0..len).map(|i| T::from(i).unwrap()).collect::<Vec<_>>();
+    pub fn ones(len: usize) -> Self {
+        let data = vec![T::one(); len];
         Self {
             data: Rc::new(data),
             shape: Shape::from_len(len),
+        }
+    }
+
+    #[inline]
+    pub fn flatten(&self) -> Self {
+        let shape = Shape {
+            shape: vec![self.shape.numel()],
+            strides: vec![1],
+            offset: 0,
+        };
+        self.reshape(shape)
+    }
+
+    #[inline]
+    pub fn squeeze(&self) -> Self {
+        Self {
+            data: Rc::clone(&self.data),
+            shape: self.shape.squeeze(),
         }
     }
 
@@ -326,16 +343,6 @@ impl<T: crate::Num> Tensor<T> {
         self.shape = shape;
     }
 
-    #[inline]
-    pub fn flatten(&self) -> Self {
-        let shape = Shape {
-            shape: vec![self.shape.numel()],
-            strides: vec![1],
-            offset: 0,
-        };
-        self.reshape(shape)
-    }
-
     pub fn reshape(&self, shape: Shape) -> Self {
         assert_eq!(
             self.shape.numel(),
@@ -358,15 +365,8 @@ impl<T: crate::Num> Tensor<T> {
         }
     }
 
-    pub fn squeeze(&self) -> Self {
-        Self {
-            data: Rc::clone(&self.data),
-            shape: self.shape.squeeze(),
-        }
-    }
-
-    pub fn transpose(&self, dim_1: usize, dim_2: usize) -> Self {
-        let shape = self.shape.transpose(dim_1, dim_2);
+    pub fn transpose(&self, dim1: usize, dim2: usize) -> Self {
+        let shape = self.shape.transpose(dim1, dim2);
         Self {
             data: Rc::clone(&self.data),
             shape,
@@ -435,16 +435,7 @@ pub struct TensorIterator<'a, T: crate::Num> {
     index_iter: TensorIndexIterator<'a>,
 }
 
-impl<'a, T: crate::Num> Iterator for TensorIterator<'a, T>
-where
-    T: num_traits::Num
-        + num_traits::cast::NumCast
-        + Copy
-        + PartialOrd
-        + num_traits::NumAssignOps
-        + Debug
-        + num_traits::NumAssignOps,
-{
+impl<'a, T: crate::Num> Iterator for TensorIterator<'a, T> {
     type Item = T;
 
     fn next(&mut self) -> Option<Self::Item> {
@@ -602,9 +593,12 @@ mod tests {
         assert_eq!(sum_tensor, sum_tensor_check);
 
         let sum_tensor = tensor.sum(Some(2));
+        // import numpy as np; shape = [3, 4, 5]; np.arange(np.prod(shape), dtype=np.float32).reshape(shape).sum(axis=2).flatten()
         let sum_vec: Vec<f32> = vec![
             10.0, 35.0, 60.0, 85.0, 110.0, 135.0, 160.0, 185.0, 210.0, 235.0, 260.0, 285.0,
         ];
+        // TODO: should this be squeezed to [3, 4] like numpy?
+        assert_eq!(sum_tensor.shape(), &[3, 4, 1]);
         assert_eq!(Rc::try_unwrap(sum_tensor.data).unwrap(), sum_vec);
     }
 }
