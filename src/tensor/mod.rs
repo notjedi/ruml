@@ -97,13 +97,32 @@ impl Shape {
             dim,
             self.ndim()
         );
-        let mut shape = self.shape.clone();
-        shape.remove(dim);
+        let mut shape = self.clone();
+        shape.shape.remove(dim);
+        shape.strides.remove(dim);
+        shape
+    }
 
-        let mut strides = self.strides.clone();
-        strides.remove(dim);
+    // Reduces the given dimension to 1. For eg, let's say we want reduce the dimension 0 from the
+    // shape [x, y, z]. This method turns the shape [x, y, z] => [1, y, z] with appropriate
+    // strides.
+    // pub(crate) fn reduce_dim(&self, dim: usize) -> (Self, Self) {
+    pub(crate) fn reduce_dim(&self, dim: usize) -> Self {
+        assert!(
+            dim < self.ndim(),
+            "{} should be within the range of 0 <= dim < {}",
+            dim,
+            self.ndim()
+        );
+        let mut reduced_shape = self.shape.clone();
+        reduced_shape[dim] = 1;
+        let mut reduced_shape = Shape::new(reduced_shape);
+        reduced_shape.strides[dim] = 0;
+        reduced_shape
 
-        Shape { shape, strides }
+        // let mut reducer = reduced_shape.clone();
+        // reducer.strides[dim] = 0;
+        // (reduced_shape, reducer)
     }
 
     pub(crate) fn squeeze(&self) -> Self {
@@ -163,6 +182,10 @@ impl Shape {
         let mut new_dims = (0..self.ndim()).collect::<Vec<usize>>();
         new_dims.swap(dim_1, dim_2);
         self.permute(&new_dims)
+    }
+
+    pub(crate) fn index_iter(&self) -> TensorIndexIterator {
+        TensorIndexIterator::new(self)
     }
 }
 
@@ -227,12 +250,14 @@ impl<T: num_traits::Float> Display for Tensor<T> {
     }
 }
 
-impl<T: num_traits::Float> Debug for Tensor<T> {
+impl<T: num_traits::Float + Debug> Debug for Tensor<T> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(
             f,
-            "Tensor with shape: {:?} and stride: {:?}",
-            self.shape.shape, self.shape.strides
+            "Tensor with shape: {:?} and stride: {:?} and data: {:?}",
+            self.shape.shape,
+            self.shape.strides,
+            self.data.as_slice()
         )
     }
 }
@@ -241,7 +266,7 @@ impl<T: num_traits::Float> Debug for Tensor<T> {
 // TODO: how do we really want Eq and PartialEq to work
 // TODO: add axis_iter method to iter through each axis of tensor
 // TODO: naive reduce functions
-// TODO: dim iter
+// TODO: get around to implement mut iter for tensor
 // TOOD: replace asserts w Result type?
 /// we only support channel last memory format
 /// see https://pytorch.org/blog/tensor-memory-format-matters for details
@@ -370,9 +395,22 @@ impl<T: num_traits::Float + num_traits::NumAssignOps> Tensor<T> {
             Some(dim) => {
                 // NOTE: need not check if axis is < 0 as far as the type is unsigned
                 assert!(dim < self.shape.ndim());
-                todo!();
+                // let (reduced_shape, reducer) = self.shape.reduce_dim(dim);
+                let reduced_shape = self.shape.reduce_dim(dim);
+                let mut sum_buffer = vec![T::zero(); reduced_shape.numel()];
+                for index in self.shape.index_iter() {
+                    sum_buffer[reduced_shape.get_buffer_idx(&index)] +=
+                        self.data[self.shape.get_buffer_idx(&index)];
+                }
+                Self {
+                    data: Rc::new(sum_buffer),
+                    shape: reduced_shape,
+                }
             }
             None => {
+                // TODO: let's say i init the tensor w only one element, the shape is [1] and the
+                // stride is [1] (ig, not sure). will the iterator work in this case?
+
                 // TODO: make this a scalar tensor
                 // TODO: use `.sum()` here
                 let sum = [self.data.iter().fold(T::zero(), |acc, &x| acc + x)].into();
@@ -549,12 +587,18 @@ mod tests {
 
     #[test]
     fn test_binary_ops() {
-        let shape: Shape = vec![2, 2, 2].into();
-        let data = vec![1.0; 2 * 2 * 2];
-        let tensor: Tensor<f32> = Tensor::new(data).reshape(shape);
+        let shape: Shape = vec![3, 4, 5].into();
+        let tensor: Tensor<f32> = Tensor::arange(shape.numel()).reshape(shape.clone());
 
         let sum_tensor = tensor.sum(None);
-        let sum_tensor_check: Tensor<f32> = Tensor::new([8.0].into());
+        let sum = (shape.numel() * (shape.numel() - 1) / 2) as f32;
+        let sum_tensor_check: Tensor<f32> = Tensor::new([sum].into());
         assert_eq!(sum_tensor, sum_tensor_check);
+
+        let sum_tensor = tensor.sum(Some(2));
+        let sum_vec: Vec<f32> = vec![
+            10.0, 35.0, 60.0, 85.0, 110.0, 135.0, 160.0, 185.0, 210.0, 235.0, 260.0, 285.0,
+        ];
+        assert_eq!(Rc::try_unwrap(sum_tensor.data).unwrap(), sum_vec);
     }
 }
