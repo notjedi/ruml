@@ -1,3 +1,5 @@
+use std::fmt::Debug;
+
 mod backend;
 mod tensor;
 
@@ -44,4 +46,20 @@ pub enum ShapeOps {
     Reshape,
     Transpose,
     View,
+}
+
+// https://stackoverflow.com/questions/40929867/how-do-you-abstract-generics-in-nested-rust-types
+pub trait Num:
+    num_traits::Num + num_traits::cast::NumCast + num_traits::NumAssignOps + PartialOrd + Debug + Copy
+{
+}
+
+impl<T> Num for T where
+    T: num_traits::Num
+        + num_traits::cast::NumCast
+        + num_traits::NumAssignOps
+        + PartialOrd
+        + Debug
+        + Copy
+{
 }

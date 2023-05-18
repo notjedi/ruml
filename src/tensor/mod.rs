@@ -11,7 +11,7 @@ pub struct Shape {
 }
 
 impl Shape {
-    // TODO: always inline few methods
+    #[inline]
     pub fn new(shape: Vec<usize>) -> Self {
         // Compute default array strides
         // Shape (a, b, c) => Give strides (b * c, c, 1)
@@ -72,14 +72,12 @@ impl Shape {
     pub(crate) fn is_valid_index(&self, index: &[usize]) -> bool {
         // TODO: should the len of index be equal to self.shape.len()?
         !index.is_empty()
-            // && !self.shape.is_empty() // rendered redundant by the next check
+            // && !self.shape.is_empty() // rendered redundant by the first 2 checks
             && index.len() <= self.shape.len()
             && index.iter().zip(self.shape.iter()).all(|(i, s)| i < s)
     }
 
     pub(crate) fn get_buffer_idx(&self, index: &[usize]) -> usize {
-        // TODO: should i assert that the length of both the index vec and that of the strides vec
-        // is same?
         self.offset
             + index
                 .iter()
@@ -106,7 +104,6 @@ impl Shape {
     // Reduces the given dimension to 1. For eg, let's say we want reduce the dimension 0 from the
     // shape [x, y, z]. This method turns the shape [x, y, z] => [1, y, z] with appropriate
     // strides.
-    // pub(crate) fn reduce_dim(&self, dim: usize) -> (Self, Self) {
     pub(crate) fn reduce_dim(&self, dim: usize) -> Self {
         assert!(
             dim < self.ndim(),
@@ -237,20 +234,19 @@ impl From<Vec<usize>> for Shape {
     }
 }
 
-// use T as num_traits::Num?
 #[derive(PartialEq, Eq)]
-pub struct Tensor<T: num_traits::Float> {
+pub struct Tensor<T: crate::Num> {
     data: Rc<Vec<T>>,
     shape: Shape,
 }
 
-impl<T: num_traits::Float> Display for Tensor<T> {
+impl<T: crate::Num> Display for Tensor<T> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "Tensor with shape {:?}", self.shape.shape)
     }
 }
 
-impl<T: num_traits::Float + Debug> Debug for Tensor<T> {
+impl<T: crate::Num> Debug for Tensor<T> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(
             f,
@@ -262,16 +258,14 @@ impl<T: num_traits::Float + Debug> Debug for Tensor<T> {
     }
 }
 
-// TODO: support scalar Tensor
-// TODO: how do we really want Eq and PartialEq to work
-// TODO: add axis_iter method to iter through each axis of tensor
+// TODO: how do we really want Eq and PartialEq to work, refer numpy
 // TODO: naive reduce functions
 // TODO: get around to implement mut iter for tensor
-// TOOD: replace asserts w Result type?
+// TODO: replace asserts w Result type or debug_assert?
 /// we only support channel last memory format
 /// see https://pytorch.org/blog/tensor-memory-format-matters for details
 
-impl<T: num_traits::Float + num_traits::NumAssignOps> Tensor<T> {
+impl<T: crate::Num> Tensor<T> {
     // TODO: change arg type to Into<Shape>?
     pub fn new(data: Vec<T>) -> Self {
         let shape = Shape {
@@ -319,9 +313,9 @@ impl<T: num_traits::Float + num_traits::NumAssignOps> Tensor<T> {
         self.shape.stride()
     }
 
-    // TODO: make the argument Into<Shape> and calculate stride ourselves
+    // TODO: make the argument Into<Shape>
     pub fn view(&mut self, shape: Shape) {
-        // TODO: create macro or helpers for asserting numels
+        // TODO: create macro or helpers for asserting numels and dims
         assert_eq!(
             self.shape.numel(),
             shape.numel(),
@@ -380,7 +374,12 @@ impl<T: num_traits::Float + num_traits::NumAssignOps> Tensor<T> {
     }
 
     pub fn dim_iter(&self, dim: usize) -> DimIterator<T> {
-        // TODO: assert dim is < self.ndim()
+        assert!(
+            dim < self.shape.ndim(),
+            "{} should be within the range of 0 <= dim < {}",
+            dim,
+            self.shape.ndim()
+        );
         DimIterator {
             tensor: self,
             iter_dim: dim,
@@ -388,14 +387,17 @@ impl<T: num_traits::Float + num_traits::NumAssignOps> Tensor<T> {
         }
     }
 
-    // TODO: this will be moved to backend in the future
-    // TODO: what should be the type of axis?
+    // TODO: should i implement Into<Option<usize>> for usize?
+    // https://hoverbear.org/blog/optional-arguments
     pub fn sum(&self, dim: Option<usize>) -> Self {
         match dim {
             Some(dim) => {
-                // NOTE: need not check if axis is < 0 as far as the type is unsigned
-                assert!(dim < self.shape.ndim());
-                // let (reduced_shape, reducer) = self.shape.reduce_dim(dim);
+                assert!(
+                    dim < self.shape.ndim(),
+                    "{} should be within the range of 0 <= dim < {}",
+                    dim,
+                    self.shape.ndim()
+                );
                 let reduced_shape = self.shape.reduce_dim(dim);
                 let mut sum_buffer = vec![T::zero(); reduced_shape.numel()];
                 for index in self.shape.index_iter() {
@@ -408,11 +410,6 @@ impl<T: num_traits::Float + num_traits::NumAssignOps> Tensor<T> {
                 }
             }
             None => {
-                // TODO: let's say i init the tensor w only one element, the shape is [1] and the
-                // stride is [1] (ig, not sure). will the iterator work in this case?
-
-                // TODO: make this a scalar tensor
-                // TODO: use `.sum()` here
                 let sum = [self.data.iter().fold(T::zero(), |acc, &x| acc + x)].into();
                 Self::new(sum)
             }
@@ -420,7 +417,7 @@ impl<T: num_traits::Float + num_traits::NumAssignOps> Tensor<T> {
     }
 }
 
-impl<'a, T: num_traits::Float + num_traits::NumAssignOps> IntoIterator for &'a Tensor<T> {
+impl<'a, T: crate::Num> IntoIterator for &'a Tensor<T> {
     type Item = T;
     type IntoIter = TensorIterator<'a, T>;
 
@@ -433,12 +430,21 @@ impl<'a, T: num_traits::Float + num_traits::NumAssignOps> IntoIterator for &'a T
 }
 
 #[derive(Debug)]
-pub struct TensorIterator<'a, T: num_traits::Float + num_traits::NumAssignOps> {
+pub struct TensorIterator<'a, T: crate::Num> {
     tensor: &'a Tensor<T>,
     index_iter: TensorIndexIterator<'a>,
 }
 
-impl<'a, T: num_traits::Float + num_traits::NumAssignOps> Iterator for TensorIterator<'a, T> {
+impl<'a, T: crate::Num> Iterator for TensorIterator<'a, T>
+where
+    T: num_traits::Num
+        + num_traits::cast::NumCast
+        + Copy
+        + PartialOrd
+        + num_traits::NumAssignOps
+        + Debug
+        + num_traits::NumAssignOps,
+{
     type Item = T;
 
     fn next(&mut self) -> Option<Self::Item> {
@@ -449,13 +455,13 @@ impl<'a, T: num_traits::Float + num_traits::NumAssignOps> Iterator for TensorIte
 }
 
 #[derive(Debug)]
-pub struct DimIterator<'a, T: num_traits::Float + num_traits::NumAssignOps> {
+pub struct DimIterator<'a, T: crate::Num> {
     tensor: &'a Tensor<T>,
     iter_dim: usize,
     dim_idx: usize,
 }
 
-impl<'a, T: num_traits::Float + num_traits::NumAssignOps> Iterator for DimIterator<'a, T> {
+impl<'a, T: crate::Num> Iterator for DimIterator<'a, T> {
     type Item = Tensor<T>;
 
     fn next(&mut self) -> Option<Self::Item> {
