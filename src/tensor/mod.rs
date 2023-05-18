@@ -7,6 +7,7 @@ use std::{
 pub struct Shape {
     pub(crate) shape: Vec<usize>,
     pub(crate) strides: Vec<usize>,
+    pub(crate) offset: usize,
 }
 
 impl Shape {
@@ -32,44 +33,42 @@ impl Shape {
                 *st = cum_prod;
                 cum_prod *= sh;
             });
-        Shape { shape, strides }
+        Shape {
+            shape,
+            strides,
+            offset: 0,
+        }
     }
 
     pub(crate) fn from_len(len: usize) -> Self {
         Shape {
             shape: [len].into(),
             strides: [1].into(),
+            offset: 0,
         }
     }
 
-    pub(crate) fn empty() -> Self {
-        Self {
-            shape: vec![],
-            strides: vec![],
-        }
-    }
-
-    #[inline(always)]
+    #[inline]
     pub fn shape(&self) -> &[usize] {
         &self.shape
     }
 
-    #[inline(always)]
+    #[inline]
     pub fn stride(&self) -> &[usize] {
         &self.strides
     }
 
-    #[inline(always)]
+    #[inline]
     pub fn ndim(&self) -> usize {
         self.shape.len()
     }
 
-    #[inline(always)]
+    #[inline]
     pub fn numel(&self) -> usize {
         self.shape.iter().product()
     }
 
-    #[inline(always)]
+    #[inline]
     pub(crate) fn is_valid_index(&self, index: &[usize]) -> bool {
         // TODO: should the len of index be equal to self.shape.len()?
         !index.is_empty()
@@ -78,14 +77,15 @@ impl Shape {
             && index.iter().zip(self.shape.iter()).all(|(i, s)| i < s)
     }
 
-    pub(crate) fn get_buffer_idx(&self, index: Vec<usize>) -> usize {
+    pub(crate) fn get_buffer_idx(&self, index: &[usize]) -> usize {
         // TODO: should i assert that the length of both the index vec and that of the strides vec
         // is same?
-        index
-            .iter()
-            .zip(self.strides.iter())
-            .map(|(&idx, &stride)| idx * stride)
-            .sum::<usize>()
+        self.offset
+            + index
+                .iter()
+                .zip(self.strides.iter())
+                .map(|(&idx, &stride)| idx * stride)
+                .sum::<usize>()
     }
 
     // Removes a dimension from the shape. For eg, let's say we want remove the dimension 1 from
@@ -119,7 +119,11 @@ impl Shape {
                     strides.push(stride);
                 }
             });
-        Self { shape, strides }
+        Self {
+            shape,
+            strides,
+            offset: 0,
+        }
     }
 
     pub(crate) fn permute(&self, perm_shape: &[usize]) -> Self {
@@ -141,7 +145,11 @@ impl Shape {
             shape.push(self.shape[*i]);
             strides.push(self.strides[*i]);
         });
-        Self { shape, strides }
+        Self {
+            shape,
+            strides,
+            offset: 0,
+        }
     }
 
     pub(crate) fn transpose(&self, dim_1: usize, dim_2: usize) -> Self {
@@ -211,7 +219,6 @@ impl From<Vec<usize>> for Shape {
 pub struct Tensor<T: num_traits::Float> {
     data: Rc<Vec<T>>,
     shape: Shape,
-    offset: usize,
 }
 
 impl<T: num_traits::Float> Display for Tensor<T> {
@@ -245,11 +252,11 @@ impl<T: num_traits::Float + num_traits::NumAssignOps> Tensor<T> {
         let shape = Shape {
             shape: [data.len()].into(),
             strides: [1].into(),
+            offset: 0,
         };
         Self {
             data: Rc::new(data),
             shape,
-            offset: 0,
         }
     }
 
@@ -258,7 +265,6 @@ impl<T: num_traits::Float + num_traits::NumAssignOps> Tensor<T> {
         Self {
             data: Rc::new(data),
             shape: Shape::from_len(len),
-            offset: 0,
         }
     }
 
@@ -267,7 +273,6 @@ impl<T: num_traits::Float + num_traits::NumAssignOps> Tensor<T> {
         Self {
             data: Rc::new(data),
             shape: Shape::from_len(len),
-            offset: 0,
         }
     }
 
@@ -276,16 +281,15 @@ impl<T: num_traits::Float + num_traits::NumAssignOps> Tensor<T> {
         Self {
             data: Rc::new(data),
             shape: Shape::from_len(len),
-            offset: 0,
         }
     }
 
-    #[inline(always)]
+    #[inline]
     pub fn shape(&self) -> &[usize] {
         self.shape.shape()
     }
 
-    #[inline(always)]
+    #[inline]
     pub fn stride(&self) -> &[usize] {
         self.shape.stride()
     }
@@ -303,11 +307,12 @@ impl<T: num_traits::Float + num_traits::NumAssignOps> Tensor<T> {
         self.shape = shape;
     }
 
-    #[inline(always)]
+    #[inline]
     pub fn flatten(&self) -> Self {
         let shape = Shape {
             shape: vec![self.shape.numel()],
             strides: vec![1],
+            offset: 0,
         };
         self.reshape(shape)
     }
@@ -323,7 +328,6 @@ impl<T: num_traits::Float + num_traits::NumAssignOps> Tensor<T> {
         Tensor {
             data: Rc::clone(&self.data),
             shape,
-            offset: 0,
         }
     }
 
@@ -332,7 +336,13 @@ impl<T: num_traits::Float + num_traits::NumAssignOps> Tensor<T> {
         Self {
             data: Rc::clone(&self.data),
             shape,
-            offset: 0,
+        }
+    }
+
+    pub fn squeeze(&self) -> Self {
+        Self {
+            data: Rc::clone(&self.data),
+            shape: self.shape.squeeze(),
         }
     }
 
@@ -341,11 +351,11 @@ impl<T: num_traits::Float + num_traits::NumAssignOps> Tensor<T> {
         Self {
             data: Rc::clone(&self.data),
             shape,
-            offset: 0,
         }
     }
 
     pub fn dim_iter(&self, dim: usize) -> DimIterator<T> {
+        // TODO: assert dim is < self.ndim()
         DimIterator {
             tensor: self,
             iter_dim: dim,
@@ -394,9 +404,9 @@ impl<'a, T: num_traits::Float + num_traits::NumAssignOps> Iterator for TensorIte
     type Item = T;
 
     fn next(&mut self) -> Option<Self::Item> {
-        self.index_iter.next().map(|index| {
-            self.tensor.data[self.tensor.offset + self.tensor.shape.get_buffer_idx(index)]
-        })
+        self.index_iter
+            .next()
+            .map(|index| self.tensor.data[self.tensor.shape.get_buffer_idx(&index)])
     }
 }
 
@@ -414,12 +424,12 @@ impl<'a, T: num_traits::Float + num_traits::NumAssignOps> Iterator for DimIterat
         if self.dim_idx >= self.tensor.shape()[self.iter_dim] {
             return None;
         }
-        let offset = self.tensor.stride()[self.iter_dim] * self.dim_idx;
+        let mut shape = self.tensor.shape.remove_dim(self.iter_dim);
+        shape.offset = self.tensor.stride()[self.iter_dim] * self.dim_idx;
         self.dim_idx += 1;
         let tensor = Tensor {
             data: Rc::clone(&self.tensor.data),
-            shape: self.tensor.shape.remove_dim(self.iter_dim),
-            offset,
+            shape,
         };
         Some(tensor)
     }
