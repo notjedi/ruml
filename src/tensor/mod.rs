@@ -73,7 +73,6 @@ impl Shape {
     pub(crate) fn is_valid_index(&self, index: &[usize]) -> bool {
         // TODO: should the len of index be equal to self.shape.len()?
         !index.is_empty()
-            // && !self.shape.is_empty() // rendered redundant by the first 2 checks
             && index.len() <= self.shape.len()
             && index.iter().zip(self.shape.iter()).all(|(i, s)| i < s)
     }
@@ -194,8 +193,6 @@ pub(crate) struct TensorIndexIterator<'a> {
 impl<'a> TensorIndexIterator<'a> {
     pub(crate) fn new(shape: &'a Shape) -> Self {
         let index = vec![0; shape.ndim()];
-        // TODO: the function call to check if it's a valid index is not really needed and we can
-        // just set it to true here, as long as we don't support scalar tensors
         let exhausted = !shape.is_valid_index(&index);
         Self {
             shape,
@@ -232,6 +229,12 @@ impl From<Vec<usize>> for Shape {
     }
 }
 
+impl From<&[usize]> for Shape {
+    fn from(shape: &[usize]) -> Self {
+        Self::new(shape.to_vec())
+    }
+}
+
 #[derive(PartialEq, Eq)]
 pub struct Tensor<T: crate::Num> {
     data: Rc<Vec<T>>,
@@ -265,7 +268,6 @@ impl<T: crate::Num> Debug for Tensor<T> {
 /// <https://ajcr.net/stride-guide-part-1>
 
 impl<T: crate::Num> Tensor<T> {
-    // TODO: change arg type to Into<Shape>?
     pub fn new(data: Vec<T>) -> Self {
         let shape = Shape {
             shape: [data.len()].into(),
@@ -304,12 +306,7 @@ impl<T: crate::Num> Tensor<T> {
 
     #[inline]
     pub fn flatten(&self) -> Self {
-        let shape = Shape {
-            shape: vec![self.shape.numel()],
-            strides: vec![1],
-            offset: 0,
-        };
-        self.reshape(shape)
+        self.reshape(&[self.shape.numel()])
     }
 
     #[inline]
@@ -330,9 +327,12 @@ impl<T: crate::Num> Tensor<T> {
         self.shape.stride()
     }
 
-    // TODO: make the argument Into<Shape>
-    pub fn view(&mut self, shape: Shape) {
+    pub fn view<S>(&mut self, shape: S)
+    where
+        S: Into<Shape>,
+    {
         // TODO: create macro or helpers for asserting numels and dims
+        let shape: Shape = shape.into();
         assert_eq!(
             self.shape.numel(),
             shape.numel(),
@@ -343,7 +343,8 @@ impl<T: crate::Num> Tensor<T> {
         self.shape = shape;
     }
 
-    pub fn reshape(&self, shape: Shape) -> Self {
+    pub fn reshape(&self, shape: &[usize]) -> Self {
+        let shape: Shape = shape.into();
         assert_eq!(
             self.shape.numel(),
             shape.numel(),
@@ -389,8 +390,11 @@ impl<T: crate::Num> Tensor<T> {
 
     // TODO: should i implement Into<Option<usize>> for usize?
     // https://hoverbear.org/blog/optional-arguments
-    pub fn sum(&self, dim: Option<usize>) -> Self {
-        match dim {
+    pub fn sum<S>(&self, dim: S) -> Self
+    where
+        S: Into<Option<usize>>,
+    {
+        match dim.into() {
             Some(dim) => {
                 assert!(
                     dim < self.shape.ndim(),
@@ -479,12 +483,19 @@ mod tests {
         let shape_vec = vec![3, 2, 5, 1];
         let shape: Shape = shape_vec.clone().into();
 
+        assert_eq!(shape.ndim(), 4);
         assert_eq!(shape.shape(), &shape_vec);
         assert_eq!(shape.stride(), &[10, 5, 1, 1]);
-        assert_eq!(shape.ndim(), 4);
         assert_eq!(shape.numel(), shape_vec.iter().product());
         assert_eq!(shape.is_valid_index(&[2, 1, 3, 0]), true);
         assert_eq!(shape.is_valid_index(&[10, 3, 0, 10]), false);
+    }
+
+    #[test]
+    fn test_shape_ops() {
+        // TODO: add tests for other ops like transpose, reduce_dim, etc
+        let shape_vec = vec![3, 2, 5, 1];
+        let shape: Shape = shape_vec.clone().into();
 
         let remove_shape = shape.remove_dim(1);
         assert_eq!(remove_shape.shape(), &[3, 5, 1]);
@@ -500,17 +511,11 @@ mod tests {
     }
 
     #[test]
-    #[should_panic]
-    fn test_shape_remove_dim() {
-        let shape_vec = vec![3, 2, 5, 1];
-        let shape: Shape = shape_vec.clone().into();
-        shape.remove_dim(4);
-    }
-
-    #[test]
     fn test_tensor() {
-        let shape: Shape = vec![2, 2, 2].into();
-        let ones_tensor: Tensor<f32> = Tensor::ones(shape.numel()).reshape(shape.clone());
+        let shape_vec = vec![2, 2, 2];
+        let shape: Shape = shape_vec.clone().into();
+
+        let ones_tensor: Tensor<f32> = Tensor::ones(shape.numel()).reshape(&shape_vec);
         assert_eq!(ones_tensor.shape(), shape.shape());
         assert_eq!(ones_tensor.data.len(), shape.numel());
         assert_eq!(
@@ -519,7 +524,7 @@ mod tests {
             "elements don't match for the Tensor::ones tensor"
         );
 
-        let zeros_tensor: Tensor<f32> = Tensor::zeros(shape.numel()).reshape(shape.clone());
+        let zeros_tensor: Tensor<f32> = Tensor::zeros(shape.numel()).reshape(&shape_vec);
         assert_eq!(zeros_tensor.data.len(), shape.numel());
         assert_eq!(zeros_tensor.shape(), shape.shape());
         assert_eq!(
@@ -528,7 +533,7 @@ mod tests {
             "elements don't match for the Tensor::zeros tensor"
         );
 
-        let arange_tensor: Tensor<f32> = Tensor::arange(shape.numel()).reshape(shape.clone());
+        let arange_tensor: Tensor<f32> = Tensor::arange(shape.numel()).reshape(&shape_vec);
         assert_eq!(arange_tensor.data.len(), shape.numel());
         assert_eq!(arange_tensor.shape(), shape.shape());
         assert_eq!(
@@ -536,8 +541,14 @@ mod tests {
             [0.0, 1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0],
             "elements don't match for the Tensor::arange tensor"
         );
+    }
 
-        // test iterator
+    #[test]
+    fn test_tensor_iter() {
+        let shape_vec = vec![2, 2, 2];
+        let shape: Shape = shape_vec.clone().into();
+
+        let ones_tensor: Tensor<f32> = Tensor::ones(shape.numel()).reshape(&shape_vec);
         ones_tensor
             .into_iter()
             .zip(ones_tensor.data.iter())
@@ -548,9 +559,10 @@ mod tests {
     }
 
     #[test]
-    fn test_dim_iter() {
-        let shape: Shape = vec![1, 2, 3].into();
-        let arange_tensor: Tensor<f32> = Tensor::arange(shape.numel()).reshape(shape.clone());
+    fn test_tensor_dim_iter() {
+        let shape_vec = vec![1, 2, 3];
+        let shape: Shape = shape_vec.clone().into();
+        let arange_tensor: Tensor<f32> = Tensor::arange(shape.numel()).reshape(&shape_vec);
 
         // should return the following elements [0, 1, 2, 3, 4, 5]
         for dim_tensor in arange_tensor.dim_iter(0) {
@@ -583,16 +595,17 @@ mod tests {
     }
 
     #[test]
-    fn test_binary_ops() {
-        let shape: Shape = vec![3, 4, 5].into();
-        let tensor: Tensor<f32> = Tensor::arange(shape.numel()).reshape(shape.clone());
+    fn test_tensor_ops() {
+        let shape_vec = vec![3, 4, 5];
+        let shape: Shape = shape_vec.clone().into();
+        let tensor: Tensor<f32> = Tensor::arange(shape.numel()).reshape(&shape_vec);
 
         let sum_tensor = tensor.sum(None);
         let sum = (shape.numel() * (shape.numel() - 1) / 2) as f32;
         let sum_tensor_check: Tensor<f32> = Tensor::new([sum].into());
         assert_eq!(sum_tensor, sum_tensor_check);
 
-        let sum_tensor = tensor.sum(Some(2));
+        let sum_tensor = tensor.sum(2);
         // import numpy as np; shape = [3, 4, 5]; np.arange(np.prod(shape), dtype=np.float32).reshape(shape).sum(axis=2).flatten()
         let sum_vec: Vec<f32> = vec![
             10.0, 35.0, 60.0, 85.0, 110.0, 135.0, 160.0, 185.0, 210.0, 235.0, 260.0, 285.0,
