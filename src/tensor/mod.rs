@@ -2,9 +2,10 @@ use crate::{assert_dim, assert_numel};
 use std::{
     fmt::{Debug, Display},
     rc::Rc,
+    vec,
 };
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct Shape {
     pub(crate) shape: Vec<usize>,
     pub(crate) strides: Vec<usize>,
@@ -86,6 +87,10 @@ impl Shape {
                 .sum::<usize>()
     }
 
+    pub fn index_iter(&self) -> TensorIndexIterator {
+        TensorIndexIterator::new(self)
+    }
+
     // Removes a dimension from the shape. For eg, let's say we want remove the dimension 1 from
     // the shape [x, y, z]. This method turns the shape [x, y, z] => [x, z] with appropriate strides.
     pub(crate) fn remove_dim(&self, dim: usize) -> Self {
@@ -110,7 +115,6 @@ impl Shape {
     }
 
     pub(crate) fn squeeze(&self) -> Self {
-        // TODO: what if the shape is [1, 1, 1] and when squeezing the shape would be empty vec
         let mut shape = Vec::with_capacity(self.ndim());
         let mut strides = Vec::with_capacity(self.ndim());
         self.shape
@@ -122,11 +126,32 @@ impl Shape {
                     strides.push(stride);
                 }
             });
+        if shape.is_empty() {
+            return Self {
+                shape: vec![1],
+                strides: vec![1],
+                offset: 0,
+            };
+        }
         Self {
             shape,
             strides,
             offset: 0,
         }
+    }
+
+    pub(crate) fn expand(&self, dim: usize, to: usize) -> Self {
+        assert_dim!(dim, self.ndim());
+        assert!(
+            self.shape[dim] == 1,
+            "cannot expand shape {:?} at dim {}.",
+            self.shape,
+            dim
+        );
+        let mut expand_shape = self.clone();
+        expand_shape.shape[dim] = to;
+        expand_shape.strides[dim] = 0;
+        expand_shape
     }
 
     pub(crate) fn permute(&self, perm_shape: &[usize]) -> Self {
@@ -160,10 +185,6 @@ impl Shape {
         let mut new_dims = (0..self.ndim()).collect::<Vec<usize>>();
         new_dims.swap(dim1, dim2);
         self.permute(&new_dims)
-    }
-
-    pub fn index_iter(&self) -> TensorIndexIterator {
-        TensorIndexIterator::new(self)
     }
 }
 
@@ -219,7 +240,7 @@ impl From<&[usize]> for Shape {
     }
 }
 
-#[derive(PartialEq, Eq)]
+#[derive(Eq, PartialEq)]
 pub struct Tensor<T: crate::Num> {
     data: Rc<Vec<T>>,
     shape: Shape,
@@ -243,10 +264,9 @@ impl<T: crate::Num> Debug for Tensor<T> {
     }
 }
 
-// TODO: how do we really want Eq and PartialEq to work, refer numpy
-// TODO: naive reduce functions
 // TODO: get around to implement mut iter for tensor
-// TODO: replace asserts w Result type or debug_assert?
+// TODO: naive reduce functions
+
 /// we only support channel last memory format
 /// see <https://pytorch.org/blog/tensor-memory-format-matters> for details
 /// <https://ajcr.net/stride-guide-part-1>
@@ -336,6 +356,14 @@ impl<T: crate::Num> Tensor<T> {
 
     pub fn transpose(&self, dim1: usize, dim2: usize) -> Self {
         let shape = self.shape.transpose(dim1, dim2);
+        Self {
+            data: Rc::clone(&self.data),
+            shape,
+        }
+    }
+
+    pub fn expand(&self, dim: usize, to: usize) -> Self {
+        let shape = self.shape.expand(dim, to);
         Self {
             data: Rc::clone(&self.data),
             shape,
@@ -465,6 +493,10 @@ mod tests {
         let perm_shape = shape.permute(&[3, 2, 1, 0]);
         assert_eq!(perm_shape.shape(), &[1, 5, 2, 3]);
         assert_eq!(perm_shape.stride(), &[1, 1, 5, 10]);
+
+        let trans_shape = shape.transpose(0, 3);
+        assert_eq!(trans_shape.shape(), &[1, 2, 5, 3]);
+        assert_eq!(trans_shape.stride(), &[1, 5, 1, 10]);
     }
 
     #[test]
@@ -502,6 +534,7 @@ mod tests {
 
     #[test]
     fn test_tensor_iter() {
+        // TODO: test tensor iter after shape ops like transpose, expand, etc
         let shape_vec = vec![2, 2, 2];
         let shape: Shape = shape_vec.clone().into();
 
