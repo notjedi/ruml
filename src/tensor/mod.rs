@@ -1,3 +1,4 @@
+use crate::{assert_dim, assert_numel};
 use std::{
     fmt::{Debug, Display},
     rc::Rc,
@@ -18,7 +19,7 @@ impl Shape {
         // Right now, we only support row major stride by default
         assert!(!shape.is_empty(), "shape should not be an empty vec");
         assert!(
-            !shape.iter().any(|x| *x == 0),
+            !shape.iter().any(|&x| x == 0),
             "{:?} should not contain 0",
             shape
         );
@@ -89,12 +90,7 @@ impl Shape {
     // Removes a dimension from the shape. For eg, let's say we want remove the dimension 1 from
     // the shape [x, y, z]. This method turns the shape [x, y, z] => [x, z] with appropriate strides.
     pub(crate) fn remove_dim(&self, dim: usize) -> Self {
-        assert!(
-            dim < self.ndim(),
-            "{} should be within the range of 0 <= dim < {}",
-            dim,
-            self.ndim()
-        );
+        assert_dim!(dim, self.ndim());
         let mut shape = self.clone();
         shape.shape.remove(dim);
         shape.strides.remove(dim);
@@ -105,12 +101,7 @@ impl Shape {
     // shape [x, y, z]. This method turns the shape [x, y, z] => [1, y, z] with appropriate
     // strides.
     pub(crate) fn reduce_dim(&self, dim: usize) -> Self {
-        assert!(
-            dim < self.ndim(),
-            "{} should be within the range of 0 <= dim < {}",
-            dim,
-            self.ndim()
-        );
+        assert_dim!(dim, self.ndim());
         let mut reduced_shape = self.shape.clone();
         reduced_shape[dim] = 1;
         let mut reduced_shape = Shape::new(reduced_shape);
@@ -148,15 +139,15 @@ impl Shape {
             "all dims must be specified exactly once"
         );
         assert!(
-            perm_shape.iter().all(|x| *x < self.ndim()),
+            !perm_shape.iter().any(|&x| x >= self.ndim()),
             "All dimensions should be less than {}",
             self.ndim()
         );
         let mut shape = Vec::with_capacity(self.ndim());
         let mut strides = Vec::with_capacity(self.ndim());
-        perm_shape.iter().for_each(|i| {
-            shape.push(self.shape[*i]);
-            strides.push(self.strides[*i]);
+        perm_shape.iter().for_each(|&i| {
+            shape.push(self.shape[i]);
+            strides.push(self.strides[i]);
         });
         Self {
             shape,
@@ -165,16 +156,10 @@ impl Shape {
         }
     }
 
-    pub(crate) fn transpose(&self, dim_1: usize, dim_2: usize) -> Self {
-        assert!(
-            dim_1 < self.ndim() && dim_2 < self.ndim(),
-            "both dim_1({}) and dim_2({}) should be less than {}",
-            dim_1,
-            dim_2,
-            self.ndim()
-        );
+    pub(crate) fn transpose(&self, dim1: usize, dim2: usize) -> Self {
+        assert_dim!(dim1, dim2, self.ndim());
         let mut new_dims = (0..self.ndim()).collect::<Vec<usize>>();
-        new_dims.swap(dim_1, dim_2);
+        new_dims.swap(dim1, dim2);
         self.permute(&new_dims)
     }
 
@@ -333,25 +318,13 @@ impl<T: crate::Num> Tensor<T> {
     {
         // TODO: create macro or helpers for asserting numels and dims
         let shape: Shape = shape.into();
-        assert_eq!(
-            self.shape.numel(),
-            shape.numel(),
-            "shape {:?} is invalid for input of size {}.",
-            shape.shape,
-            self.shape.numel()
-        );
+        assert_numel!(self.shape.numel(), shape);
         self.shape = shape;
     }
 
     pub fn reshape(&self, shape: &[usize]) -> Self {
         let shape: Shape = shape.into();
-        assert_eq!(
-            self.shape.numel(),
-            shape.numel(),
-            "shape {:?} is invalid for input of size {}.",
-            shape.shape,
-            self.shape.numel()
-        );
+        assert_numel!(self.shape.numel(), shape);
         Tensor {
             data: Rc::clone(&self.data),
             shape,
@@ -375,12 +348,7 @@ impl<T: crate::Num> Tensor<T> {
     }
 
     pub fn dim_iter(&self, dim: usize) -> DimIterator<T> {
-        assert!(
-            dim < self.shape.ndim(),
-            "{} should be within the range of 0 <= dim < {}",
-            dim,
-            self.shape.ndim()
-        );
+        assert_dim!(dim, self.shape.ndim());
         DimIterator {
             tensor: self,
             iter_dim: dim,
@@ -394,14 +362,10 @@ impl<T: crate::Num> Tensor<T> {
     where
         S: Into<Option<usize>>,
     {
+        // TODO: should the shape of the result be squeezed like numpy?
         match dim.into() {
             Some(dim) => {
-                assert!(
-                    dim < self.shape.ndim(),
-                    "{} should be within the range of 0 <= dim < {}",
-                    dim,
-                    self.shape.ndim()
-                );
+                assert_dim!(dim, self.shape.ndim());
                 let reduced_shape = self.shape.reduce_dim(dim);
                 let mut sum_buffer = vec![T::zero(); reduced_shape.numel()];
                 for index in self.shape.index_iter() {
@@ -610,7 +574,6 @@ mod tests {
         let sum_vec: Vec<f32> = vec![
             10.0, 35.0, 60.0, 85.0, 110.0, 135.0, 160.0, 185.0, 210.0, 235.0, 260.0, 285.0,
         ];
-        // TODO: should this be squeezed to [3, 4] like numpy?
         assert_eq!(sum_tensor.shape(), &[3, 4, 1]);
         assert_eq!(Rc::try_unwrap(sum_tensor.data).unwrap(), sum_vec);
     }

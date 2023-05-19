@@ -6,6 +6,41 @@ mod tensor;
 pub use backend::*;
 pub use tensor::*;
 
+macro_rules! assert_dim {
+    ($dim:expr, $ndim:expr) => {
+        assert!(
+            $dim < $ndim,
+            "{} should be within the range of 0 <= dim < {}",
+            $dim,
+            $ndim
+        );
+    };
+    ($dim1:expr, $dim2:expr, $ndim:expr) => {
+        assert!(
+            $dim1 < $ndim && $dim2 < $ndim,
+            "both dim1({}) and dim2({}) should be less than {}",
+            $dim1,
+            $dim2,
+            $ndim
+        );
+    };
+}
+
+macro_rules! assert_numel {
+    ($self_numel:expr, $other:ident) => {
+        assert_eq!(
+            $self_numel,
+            $other.numel(),
+            "shape {:?} is invalid for input of size {}.",
+            $other,
+            $self_numel
+        );
+    };
+}
+
+pub(crate) use assert_dim;
+pub(crate) use assert_numel;
+
 // List of ops taken from:
 // 1. https://github.com/geohot/tinygrad/blob/master/tinygrad/ops.py
 // 2. https://github.com/geohot/tinygrad/blob/master/tinygrad/mlops.py
