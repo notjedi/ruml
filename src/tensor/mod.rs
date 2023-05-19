@@ -6,7 +6,7 @@ use std::{
     assert_eq,
     fmt::{Debug, Display},
     sync::Arc,
-    vec,
+    todo, vec,
 };
 
 // https://stackoverflow.com/questions/40929867/how-do-you-abstract-generics-in-nested-rust-types
@@ -126,6 +126,12 @@ impl<T: Num> Tensor<T> {
 
     #[inline]
     pub fn flatten(&self) -> Self {
+        if self.data.len() != self.shape.numel() {
+            // BUG(FIXED): let's say i expand a tensor from shape (3, 1) -> (3, 3).
+            // then self.shape.numel() would be = 9. but the len of the actual data buffer would be 3.
+            // so just copy data to new buffer if the actual buffer len and shape.numel don't match.
+            return self.contiguous().reshape(&[self.shape.numel()]);
+        }
         self.reshape(&[self.shape.numel()])
     }
 
@@ -234,7 +240,21 @@ impl<T: Num> Tensor<T> {
             data: Arc::new(data),
             shape: Shape::new(self.shape.shape.clone()),
         }
-        // self.into_iter().zip(other.into_iter()).map(|x, y|);
+    }
+
+    pub fn broadcasted_zip(&self, other: &Self, f: impl Fn(T, T) -> T) -> Self {
+        if self.shape() == other.shape() {
+            return self.zip(other, f);
+        }
+
+        if self.shape.ndim() < other.shape.ndim() {
+            todo!()
+        } else if self.shape.ndim() == other.shape.ndim() {
+            todo!()
+        } else {
+            // here self.shape.ndim() > other.shape.ndim()
+            todo!()
+        }
     }
 
     pub fn sum<S>(&self, dim: S) -> Self
