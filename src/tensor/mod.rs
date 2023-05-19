@@ -4,7 +4,7 @@ pub use self::shape::{Shape, TensorIndexIterator};
 use crate::{assert_dim, assert_numel};
 use std::{
     fmt::{Debug, Display},
-    rc::Rc,
+    sync::Arc,
     vec,
 };
 
@@ -26,7 +26,7 @@ impl<T> Num for T where
 
 #[derive(Eq, PartialEq)]
 pub struct Tensor<T: Num> {
-    data: Rc<Vec<T>>,
+    data: Arc<Vec<T>>,
     shape: Shape,
 }
 
@@ -63,7 +63,7 @@ impl<T: Num> Tensor<T> {
             offset: 0,
         };
         Self {
-            data: Rc::new(data),
+            data: Arc::new(data),
             shape,
         }
     }
@@ -71,7 +71,7 @@ impl<T: Num> Tensor<T> {
     pub fn arange(len: usize) -> Self {
         let data = (0..len).map(|i| T::from(i).unwrap()).collect::<Vec<_>>();
         Self {
-            data: Rc::new(data),
+            data: Arc::new(data),
             shape: Shape::from_len(len),
         }
     }
@@ -79,7 +79,7 @@ impl<T: Num> Tensor<T> {
     pub fn zeros(len: usize) -> Self {
         let data = vec![T::zero(); len];
         Self {
-            data: Rc::new(data),
+            data: Arc::new(data),
             shape: Shape::from_len(len),
         }
     }
@@ -87,7 +87,7 @@ impl<T: Num> Tensor<T> {
     pub fn ones(len: usize) -> Self {
         let data = vec![T::one(); len];
         Self {
-            data: Rc::new(data),
+            data: Arc::new(data),
             shape: Shape::from_len(len),
         }
     }
@@ -100,7 +100,7 @@ impl<T: Num> Tensor<T> {
     #[inline]
     pub fn squeeze(&self) -> Self {
         Self {
-            data: Rc::clone(&self.data),
+            data: Arc::clone(&self.data),
             shape: self.shape.squeeze(),
         }
     }
@@ -124,7 +124,7 @@ impl<T: Num> Tensor<T> {
     pub fn permute(&self, dims: &[usize]) -> Self {
         let shape = self.shape.permute(dims);
         Self {
-            data: Rc::clone(&self.data),
+            data: Arc::clone(&self.data),
             shape,
         }
     }
@@ -133,7 +133,7 @@ impl<T: Num> Tensor<T> {
         let shape: Shape = shape.into();
         assert_numel!(self.shape.numel(), shape);
         Tensor {
-            data: Rc::clone(&self.data),
+            data: Arc::clone(&self.data),
             shape,
         }
     }
@@ -141,7 +141,7 @@ impl<T: Num> Tensor<T> {
     pub fn expand(&self, dim: usize, to: usize) -> Self {
         let shape = self.shape.expand(dim, to);
         Self {
-            data: Rc::clone(&self.data),
+            data: Arc::clone(&self.data),
             shape,
         }
     }
@@ -149,7 +149,7 @@ impl<T: Num> Tensor<T> {
     pub fn transpose(&self, dim1: usize, dim2: usize) -> Self {
         let shape = self.shape.transpose(dim1, dim2);
         Self {
-            data: Rc::clone(&self.data),
+            data: Arc::clone(&self.data),
             shape,
         }
     }
@@ -177,7 +177,7 @@ impl<T: Num> Tensor<T> {
                         self.data[self.shape.get_buffer_idx(&index)];
                 }
                 Self {
-                    data: Rc::new(sum_buffer),
+                    data: Arc::new(sum_buffer),
                     shape: reduced_shape,
                 }
             }
@@ -235,7 +235,7 @@ impl<'a, T: Num> Iterator for DimIterator<'a, T> {
         shape.offset = self.tensor.stride()[self.iter_dim] * self.dim_idx;
         self.dim_idx += 1;
         let tensor = Tensor {
-            data: Rc::clone(&self.tensor.data),
+            data: Arc::clone(&self.tensor.data),
             shape,
         };
         Some(tensor)
@@ -348,6 +348,6 @@ mod tests {
             10.0, 35.0, 60.0, 85.0, 110.0, 135.0, 160.0, 185.0, 210.0, 235.0, 260.0, 285.0,
         ];
         assert_eq!(sum_tensor.shape(), &[3, 4, 1]);
-        assert_eq!(Rc::try_unwrap(sum_tensor.data).unwrap(), sum_vec);
+        assert_eq!(Arc::try_unwrap(sum_tensor.data).unwrap(), sum_vec);
     }
 }
