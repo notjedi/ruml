@@ -104,7 +104,6 @@ impl Shape {
         let mut reduced_shape = self.shape.clone();
         reduced_shape[dim] = 1;
         let mut reduced_shape = Shape::new(reduced_shape);
-        // TODO: it is okay for a stride to be 0?
         reduced_shape.strides[dim] = 0;
         reduced_shape
     }

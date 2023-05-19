@@ -3,6 +3,7 @@ mod shape;
 pub use self::shape::{Shape, TensorIndexIterator};
 use crate::{assert_dim, assert_numel};
 use std::{
+    assert_eq,
     fmt::{Debug, Display},
     sync::Arc,
     vec,
@@ -45,6 +46,37 @@ impl<T: Num> Debug for Tensor<T> {
             self.shape.strides,
             self.data.as_slice()
         )
+    }
+}
+
+impl<T: Num> std::ops::Add for Tensor<T> {
+    type Output = Self;
+
+    fn add(self, rhs: Self) -> Self::Output {
+        // TODO: broadcast apply
+        self.zip(&rhs, |x, y| x + y)
+    }
+}
+
+impl<T: Num> std::ops::Add<&Tensor<T>> for Tensor<T> {
+    type Output = Self;
+
+    fn add(self, rhs: &Self) -> Self::Output {
+        // TODO: broadcast apply
+        self.zip(&rhs, |x, y| x + y)
+    }
+}
+
+impl<T: Num> std::ops::Add<T> for Tensor<T> {
+    type Output = Self;
+
+    fn add(self, rhs: T) -> Self::Output {
+        let mut add_vec = (*self.data).clone();
+        add_vec.iter_mut().for_each(|x| *x += rhs);
+        Self {
+            data: Arc::new(add_vec),
+            shape: self.shape.clone(),
+        }
     }
 }
 
@@ -98,10 +130,32 @@ impl<T: Num> Tensor<T> {
     }
 
     #[inline]
+    pub fn clone(&self) -> Self {
+        Self {
+            // https://stackoverflow.com/a/55750742
+            data: Arc::new((*self.data).clone()),
+            shape: self.shape.clone(),
+        }
+    }
+
+    #[inline]
+    pub fn ravel(&self) -> Vec<T> {
+        self.into_iter().collect::<Vec<T>>()
+    }
+
+    #[inline]
     pub fn squeeze(&self) -> Self {
         Self {
             data: Arc::clone(&self.data),
             shape: self.shape.squeeze(),
+        }
+    }
+
+    #[inline]
+    pub fn contiguous(&self) -> Self {
+        Self {
+            data: Arc::new(self.ravel()),
+            shape: Shape::new(self.shape.shape.clone()),
         }
     }
 
@@ -163,6 +217,26 @@ impl<T: Num> Tensor<T> {
         }
     }
 
+    pub fn zip(&self, other: &Self, f: impl Fn(T, T) -> T) -> Self {
+        assert_eq!(
+            self.shape(),
+            other.shape(),
+            "shapes {:?} of self and {:?} of other must match",
+            self.shape(),
+            other.shape()
+        );
+        let data = self
+            .into_iter()
+            .zip(other.into_iter())
+            .map(|(x, y)| f(x, y))
+            .collect();
+        Self {
+            data: Arc::new(data),
+            shape: Shape::new(self.shape.shape.clone()),
+        }
+        // self.into_iter().zip(other.into_iter()).map(|x, y|);
+    }
+
     pub fn sum<S>(&self, dim: S) -> Self
     where
         S: Into<Option<usize>>,
@@ -170,12 +244,14 @@ impl<T: Num> Tensor<T> {
         match dim.into() {
             Some(dim) => {
                 assert_dim!(dim, self.shape.ndim());
-                let reduced_shape = self.shape.reduce_dim(dim);
+                let mut reduced_shape = self.shape.reduce_dim(dim);
                 let mut sum_buffer = vec![T::zero(); reduced_shape.numel()];
                 for index in self.shape.index_iter() {
                     sum_buffer[reduced_shape.get_buffer_idx(&index)] +=
                         self.data[self.shape.get_buffer_idx(&index)];
                 }
+                // TODO: do i really need to change the stride here?
+                reduced_shape.strides[dim] = 1;
                 Self {
                     data: Arc::new(sum_buffer),
                     shape: reduced_shape,
@@ -333,6 +409,28 @@ mod tests {
 
     #[test]
     fn test_tensor_ops() {
+        let add_shape: Shape = vec![2, 2, 2].into();
+        let add_tensor = Tensor::arange(add_shape.numel()).reshape(&add_shape.shape) + 5.0;
+        assert_eq!(
+            add_tensor.data.as_slice(),
+            [5.0, 6.0, 7.0, 8.0, 9.0, 10.0, 11.0, 12.0],
+            "elements don't match for the Tensor::arange tensor"
+        );
+    }
+
+    // #[test]
+    // fn test_tensor_shape_ops() {
+    //     let shape: Shape = vec![2, 1, 3].into();
+
+    //     let tensor: Tensor<f32> = Tensor::arange(shape.numel())
+    //         .reshape(&shape.shape)
+    //         .expand(1, 4);
+    //     let tensor: Vec<_> = tensor.ravel();
+    //     // assert!(false);
+    // }
+
+    #[test]
+    fn test_tensor_mlops() {
         let shape_vec = vec![3, 4, 5];
         let shape: Shape = shape_vec.clone().into();
         let tensor: Tensor<f32> = Tensor::arange(shape.numel()).reshape(&shape_vec);
