@@ -9,7 +9,8 @@ pub struct Shape {
 
 impl Shape {
     #[inline]
-    pub fn new(shape: Vec<usize>) -> Self {
+    pub fn new(shape: &[usize]) -> Self {
+        // TODO: accept &[usize] as arg
         // Compute default array strides
         // Shape (a, b, c) => Give strides (b * c, c, 1)
         // Right now, we only support row major stride by default
@@ -31,7 +32,7 @@ impl Shape {
                 cum_prod *= sh;
             });
         Shape {
-            shape,
+            shape: shape.to_vec(),
             strides,
             offset: 0,
         }
@@ -52,7 +53,7 @@ impl Shape {
     }
 
     #[inline]
-    pub fn stride(&self) -> &[usize] {
+    pub fn strides(&self) -> &[usize] {
         &self.strides
     }
 
@@ -64,6 +65,11 @@ impl Shape {
     #[inline]
     pub fn numel(&self) -> usize {
         self.shape.iter().product()
+    }
+
+    #[inline]
+    pub fn is_contiguous(&self) -> bool {
+        self.strides() == Shape::new(&self.shape).strides()
     }
 
     #[inline]
@@ -103,7 +109,7 @@ impl Shape {
         assert_dim!(dim, self.ndim());
         let mut reduced_shape = self.shape.clone();
         reduced_shape[dim] = 1;
-        let mut reduced_shape = Shape::new(reduced_shape);
+        let mut reduced_shape = Shape::new(&reduced_shape);
         reduced_shape.strides[dim] = 0;
         reduced_shape
     }
@@ -224,13 +230,13 @@ impl<'a> Iterator for TensorIndexIterator<'a> {
 
 impl From<Vec<usize>> for Shape {
     fn from(shape: Vec<usize>) -> Self {
-        Self::new(shape)
+        Self::new(&shape)
     }
 }
 
 impl From<&[usize]> for Shape {
     fn from(shape: &[usize]) -> Self {
-        Self::new(shape.to_vec())
+        Self::new(shape)
     }
 }
 
@@ -245,7 +251,7 @@ mod tests {
 
         assert_eq!(shape.ndim(), 4);
         assert_eq!(shape.shape(), &shape_vec);
-        assert_eq!(shape.stride(), &[10, 5, 1, 1]);
+        assert_eq!(shape.strides(), &[10, 5, 1, 1]);
         assert_eq!(shape.numel(), shape_vec.iter().product());
         assert_eq!(shape.is_valid_index(&[2, 1, 3, 0]), true);
         assert_eq!(shape.is_valid_index(&[10, 3, 0, 10]), false);
@@ -259,18 +265,18 @@ mod tests {
 
         let remove_shape = shape.remove_dim(1);
         assert_eq!(remove_shape.shape(), &[3, 5, 1]);
-        assert_eq!(remove_shape.stride(), &[10, 1, 1]);
+        assert_eq!(remove_shape.strides(), &[10, 1, 1]);
 
         let squeeze_shape = shape.squeeze();
         assert_eq!(squeeze_shape.shape(), &[3, 2, 5]);
-        assert_eq!(squeeze_shape.stride(), &[10, 5, 1]);
+        assert_eq!(squeeze_shape.strides(), &[10, 5, 1]);
 
         let perm_shape = shape.permute(&[3, 2, 1, 0]);
         assert_eq!(perm_shape.shape(), &[1, 5, 2, 3]);
-        assert_eq!(perm_shape.stride(), &[1, 1, 5, 10]);
+        assert_eq!(perm_shape.strides(), &[1, 1, 5, 10]);
 
         let trans_shape = shape.transpose(0, 3);
         assert_eq!(trans_shape.shape(), &[1, 2, 5, 3]);
-        assert_eq!(trans_shape.stride(), &[1, 5, 1, 10]);
+        assert_eq!(trans_shape.strides(), &[1, 5, 1, 10]);
     }
 }

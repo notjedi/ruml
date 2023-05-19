@@ -159,9 +159,10 @@ impl<T: Num> Tensor<T> {
 
     #[inline]
     pub fn contiguous(&self) -> Self {
+        // TODO: should we only copy data if tensor is not contiguous?
         Self {
             data: Arc::new(self.ravel()),
-            shape: Shape::new(self.shape.shape.clone()),
+            shape: Shape::new(&self.shape.shape),
         }
     }
 
@@ -171,8 +172,8 @@ impl<T: Num> Tensor<T> {
     }
 
     #[inline]
-    pub fn stride(&self) -> &[usize] {
-        self.shape.stride()
+    pub fn strides(&self) -> &[usize] {
+        self.shape.strides()
     }
 
     pub fn view(&mut self, shape: &[usize]) {
@@ -238,7 +239,7 @@ impl<T: Num> Tensor<T> {
             .collect();
         Self {
             data: Arc::new(data),
-            shape: Shape::new(self.shape.shape.clone()),
+            shape: Shape::new(&self.shape.shape),
         }
     }
 
@@ -328,7 +329,7 @@ impl<'a, T: Num> Iterator for DimIterator<'a, T> {
             return None;
         }
         let mut shape = self.tensor.shape.remove_dim(self.iter_dim);
-        shape.offset = self.tensor.stride()[self.iter_dim] * self.dim_idx;
+        shape.offset = self.tensor.strides()[self.iter_dim] * self.dim_idx;
         self.dim_idx += 1;
         let tensor = Tensor {
             data: Arc::clone(&self.tensor.data),
