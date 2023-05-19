@@ -1,9 +1,15 @@
 [package]
 name = "ruml"
-version = "0.1.0"
 edition = "2021"
+version = "0.1.0"
+license = "GPL-3.0"
+readme = "README.md"
+categories = ["library"]
+description = "a smol tensor library"
+repository = "https://github.com/notjedi/ruml"
+authors = ["Krithic Kumar krithickumarub@protonmail.com"]
+keywords = ["tensor", "tensor-library", "machine-learning"]
 
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
 num-traits = "0.2"

@@ -42,6 +42,15 @@ impl Shape {
     }
 
     #[inline]
+    pub(crate) fn from_len(len: usize) -> Self {
+        Shape {
+            shape: [len].into(),
+            strides: [1].into(),
+            offset: 0,
+        }
+    }
+
+    #[inline]
     pub fn shape(&self) -> &[usize] {
         &self.shape
     }
@@ -62,23 +71,13 @@ impl Shape {
     }
 
     #[inline]
-    pub(crate) fn from_len(len: usize) -> Self {
-        Shape {
-            shape: [len].into(),
-            strides: [1].into(),
-            offset: 0,
-        }
-    }
-
-    #[inline]
-    pub(crate) fn is_valid_index(&self, index: &[usize]) -> bool {
-        // TODO: should the len of index be equal to self.shape.len()?
+    pub fn is_valid_index(&self, index: &[usize]) -> bool {
         !index.is_empty()
             && index.len() <= self.shape.len()
             && index.iter().zip(self.shape.iter()).all(|(i, s)| i < s)
     }
 
-    pub(crate) fn get_buffer_idx(&self, index: &[usize]) -> usize {
+    pub fn get_buffer_idx(&self, index: &[usize]) -> usize {
         self.offset
             + index
                 .iter()
@@ -105,7 +104,7 @@ impl Shape {
         let mut reduced_shape = self.shape.clone();
         reduced_shape[dim] = 1;
         let mut reduced_shape = Shape::new(reduced_shape);
-        // TODO: it is okay for a stride to be 0? think of a case where it might fail
+        // TODO: it is okay for a stride to be 0?
         reduced_shape.strides[dim] = 0;
         reduced_shape
     }
@@ -163,20 +162,20 @@ impl Shape {
         self.permute(&new_dims)
     }
 
-    pub(crate) fn index_iter(&self) -> TensorIndexIterator {
+    pub fn index_iter(&self) -> TensorIndexIterator {
         TensorIndexIterator::new(self)
     }
 }
 
 #[derive(Debug)]
-pub(crate) struct TensorIndexIterator<'a> {
+pub struct TensorIndexIterator<'a> {
     shape: &'a Shape,
     index: Vec<usize>,
     exhausted: bool,
 }
 
 impl<'a> TensorIndexIterator<'a> {
-    pub(crate) fn new(shape: &'a Shape) -> Self {
+    pub fn new(shape: &'a Shape) -> Self {
         let index = vec![0; shape.ndim()];
         let exhausted = !shape.is_valid_index(&index);
         Self {
@@ -312,28 +311,24 @@ impl<T: crate::Num> Tensor<T> {
         self.shape.stride()
     }
 
-    pub fn view<S>(&mut self, shape: S)
-    where
-        S: Into<Shape>,
-    {
-        // TODO: create macro or helpers for asserting numels and dims
+    pub fn view(&mut self, shape: &[usize]) {
         let shape: Shape = shape.into();
         assert_numel!(self.shape.numel(), shape);
         self.shape = shape;
+    }
+
+    pub fn permute(&self, dims: &[usize]) -> Self {
+        let shape = self.shape.permute(dims);
+        Self {
+            data: Rc::clone(&self.data),
+            shape,
+        }
     }
 
     pub fn reshape(&self, shape: &[usize]) -> Self {
         let shape: Shape = shape.into();
         assert_numel!(self.shape.numel(), shape);
         Tensor {
-            data: Rc::clone(&self.data),
-            shape,
-        }
-    }
-
-    pub fn permute(&self, dims: &[usize]) -> Self {
-        let shape = self.shape.permute(dims);
-        Self {
             data: Rc::clone(&self.data),
             shape,
         }
@@ -356,13 +351,11 @@ impl<T: crate::Num> Tensor<T> {
         }
     }
 
-    // TODO: should i implement Into<Option<usize>> for usize?
     // https://hoverbear.org/blog/optional-arguments
     pub fn sum<S>(&self, dim: S) -> Self
     where
         S: Into<Option<usize>>,
     {
-        // TODO: should the shape of the result be squeezed like numpy?
         match dim.into() {
             Some(dim) => {
                 assert_dim!(dim, self.shape.ndim());
