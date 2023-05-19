@@ -1,6 +1,6 @@
 mod shape;
 
-use self::shape::{Shape, TensorIndexIterator};
+pub use self::shape::{Shape, TensorIndexIterator};
 use crate::{assert_dim, assert_numel};
 use std::{
     fmt::{Debug, Display},
@@ -138,16 +138,16 @@ impl<T: Num> Tensor<T> {
         }
     }
 
-    pub fn transpose(&self, dim1: usize, dim2: usize) -> Self {
-        let shape = self.shape.transpose(dim1, dim2);
+    pub fn expand(&self, dim: usize, to: usize) -> Self {
+        let shape = self.shape.expand(dim, to);
         Self {
             data: Rc::clone(&self.data),
             shape,
         }
     }
 
-    pub fn expand(&self, dim: usize, to: usize) -> Self {
-        let shape = self.shape.expand(dim, to);
+    pub fn transpose(&self, dim1: usize, dim2: usize) -> Self {
+        let shape = self.shape.transpose(dim1, dim2);
         Self {
             data: Rc::clone(&self.data),
             shape,
