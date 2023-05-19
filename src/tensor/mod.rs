@@ -6,7 +6,7 @@ use std::{
     assert_eq,
     fmt::{Debug, Display},
     sync::Arc,
-    todo, vec,
+    vec,
 };
 
 // https://stackoverflow.com/questions/40929867/how-do-you-abstract-generics-in-nested-rust-types
@@ -126,7 +126,8 @@ impl<T: Num> Tensor<T> {
 
     #[inline]
     pub fn flatten(&self) -> Self {
-        if self.data.len() != self.shape.numel() {
+        // if self.data.len() != self.shape.numel() {
+        if self.shape.is_contiguous() {
             // BUG(FIXED): let's say i expand a tensor from shape (3, 1) -> (3, 3).
             // then self.shape.numel() would be = 9. but the len of the actual data buffer would be 3.
             // so just copy data to new buffer if the actual buffer len and shape.numel don't match.
@@ -159,7 +160,14 @@ impl<T: Num> Tensor<T> {
 
     #[inline]
     pub fn contiguous(&self) -> Self {
-        // TODO: should we only copy data if tensor is not contiguous?
+        if self.shape.is_contiguous() {
+            // NOTE: torch only copies data if data buffer is not contiguous
+            // so we follow torch
+            return Self {
+                data: Arc::clone(&self.data),
+                shape: self.shape.clone(),
+            };
+        }
         Self {
             data: Arc::new(self.ravel()),
             shape: Shape::new(&self.shape.shape),
@@ -207,6 +215,13 @@ impl<T: Num> Tensor<T> {
         }
     }
 
+    pub fn expand_to(&self, dims: &[usize]) -> Self {
+        Tensor {
+            data: Arc::clone(&self.data),
+            shape: self.shape.expand_to(dims),
+        }
+    }
+
     pub fn transpose(&self, dim1: usize, dim2: usize) -> Self {
         let shape = self.shape.transpose(dim1, dim2);
         Self {
@@ -248,13 +263,28 @@ impl<T: Num> Tensor<T> {
             return self.zip(other, f);
         }
 
+        if self.shape.ndim() == other.shape.ndim() {
+            let new_shape = self
+                .shape()
+                .iter()
+                .zip(other.shape())
+                .map(|(&x, &y)| std::cmp::max(x, y))
+                .collect::<Vec<usize>>();
+            let expanded_self = self.expand_to(&new_shape);
+            let expanded_other = self.expand_to(&new_shape);
+            return expanded_self.zip(&expanded_other, f);
+        }
+
+        let ones_to_add = self.shape.ndim().abs_diff(other.shape.ndim());
+        let mut new_shape = vec![1; ones_to_add];
+
         if self.shape.ndim() < other.shape.ndim() {
-            todo!()
-        } else if self.shape.ndim() == other.shape.ndim() {
-            todo!()
+            new_shape.extend_from_slice(self.shape());
+            return self.reshape(&new_shape).broadcasted_zip(&other, f);
         } else {
-            // here self.shape.ndim() > other.shape.ndim()
-            todo!()
+            // TODO: hopefully the arguments are interchangeable
+            new_shape.extend_from_slice(other.shape());
+            return other.reshape(&new_shape).broadcasted_zip(&self, f);
         }
     }
 
@@ -447,6 +477,7 @@ mod tests {
     //         .reshape(&shape.shape)
     //         .expand(1, 4);
     //     let tensor: Vec<_> = tensor.ravel();
+    //     TODO: add tests for flatten after expanding
     //     // assert!(false);
     // }
 

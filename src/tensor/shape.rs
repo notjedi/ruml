@@ -1,3 +1,6 @@
+use core::panic;
+use std::assert_eq;
+
 use crate::assert_dim;
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -134,6 +137,35 @@ impl Shape {
             };
         }
         Self {
+            shape,
+            strides,
+            offset: 0,
+        }
+    }
+
+    pub(crate) fn expand_to(&self, dims: &[usize]) -> Self {
+        assert_eq!(
+            self.ndim(),
+            dims.len(),
+            "ndims should be equal for both from shape and to shape"
+        );
+        let mut shape = Vec::with_capacity(self.ndim());
+        let mut strides = Vec::with_capacity(self.ndim());
+        (0..self.ndim()).for_each(|i| {
+            if self.shape[i] == dims[i] {
+                shape.push(dims[i]);
+                strides.push(self.strides[i]);
+            } else if self.shape[i] == 1 {
+                shape.push(dims[i]);
+                strides.push(0);
+            } else {
+                panic!(
+                    "cannot expand shape from {:?} to {:?} at dim {}",
+                    self.shape, dims, i
+                );
+            }
+        });
+        Shape {
             shape,
             strides,
             offset: 0,
