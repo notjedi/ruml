@@ -108,20 +108,26 @@ impl<T: Num> Tensor<T> {
         }
     }
 
-    pub fn zeros(len: usize) -> Self {
-        let data = vec![T::zero(); len];
+    // lazy init of tensor with value
+    pub fn full(value: T, shape: &[usize]) -> Self {
+        let data = vec![value; 1];
+        let shape = Shape {
+            shape: shape.to_vec(),
+            strides: vec![0; shape.len()],
+            offset: 0,
+        };
         Self {
             data: Arc::new(data),
-            shape: Shape::from_len(len),
+            shape,
         }
     }
 
-    pub fn ones(len: usize) -> Self {
-        let data = vec![T::one(); len];
-        Self {
-            data: Arc::new(data),
-            shape: Shape::from_len(len),
-        }
+    pub fn zeros(shape: &[usize]) -> Self {
+        Self::full(T::zero(), shape)
+    }
+
+    pub fn ones(shape: &[usize]) -> Self {
+        Self::full(T::one(), shape)
     }
 
     #[inline]
@@ -378,20 +384,18 @@ mod tests {
         let shape_vec = vec![2, 2, 2];
         let shape: Shape = shape_vec.clone().into();
 
-        let ones_tensor: Tensor<f32> = Tensor::ones(shape.numel()).reshape(&shape_vec);
+        let ones_tensor: Tensor<f32> = Tensor::ones(&shape_vec);
         assert_eq!(ones_tensor.shape(), shape.shape());
-        assert_eq!(ones_tensor.data.len(), shape.numel());
         assert_eq!(
-            ones_tensor.data.as_slice(),
+            ones_tensor.ravel(),
             [1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0],
             "elements don't match for the Tensor::ones tensor"
         );
 
-        let zeros_tensor: Tensor<f32> = Tensor::zeros(shape.numel()).reshape(&shape_vec);
-        assert_eq!(zeros_tensor.data.len(), shape.numel());
+        let zeros_tensor: Tensor<f32> = Tensor::zeros(&shape_vec);
         assert_eq!(zeros_tensor.shape(), shape.shape());
         assert_eq!(
-            zeros_tensor.data.as_slice(),
+            zeros_tensor.ravel(),
             [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
             "elements don't match for the Tensor::zeros tensor"
         );
@@ -400,7 +404,7 @@ mod tests {
         assert_eq!(arange_tensor.data.len(), shape.numel());
         assert_eq!(arange_tensor.shape(), shape.shape());
         assert_eq!(
-            arange_tensor.data.as_slice(),
+            arange_tensor.ravel(),
             [0.0, 1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0],
             "elements don't match for the Tensor::arange tensor"
         );
@@ -410,9 +414,8 @@ mod tests {
     fn test_tensor_iter() {
         // TODO: test tensor iter after shape ops like transpose, expand, etc
         let shape_vec = vec![2, 2, 2];
-        let shape: Shape = shape_vec.clone().into();
 
-        let ones_tensor: Tensor<f32> = Tensor::ones(shape.numel()).reshape(&shape_vec);
+        let ones_tensor: Tensor<f32> = Tensor::ones(&shape_vec);
         ones_tensor
             .into_iter()
             .zip(ones_tensor.data.iter())
@@ -463,7 +466,7 @@ mod tests {
         let add_shape: Shape = vec![2, 2, 2].into();
         let add_tensor = Tensor::arange(add_shape.numel()).reshape(&add_shape.shape) + 5.0;
         assert_eq!(
-            add_tensor.data.as_slice(),
+            add_tensor.ravel(),
             [5.0, 6.0, 7.0, 8.0, 9.0, 10.0, 11.0, 12.0],
             "elements don't match for the Tensor::arange tensor"
         );
