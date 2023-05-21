@@ -36,6 +36,13 @@ macro_rules! assert_numel {
             $self_numel
         );
     };
+    ($self_numel:expr, $other_numel:expr, $other:ident) => {
+        assert_eq!(
+            $self_numel, $other_numel,
+            "shape {:?} is invalid for input of size {}.",
+            $other, $self_numel
+        );
+    };
 }
 
 pub(crate) use assert_dim;

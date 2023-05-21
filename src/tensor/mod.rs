@@ -53,8 +53,7 @@ impl<T: Num> std::ops::Add for Tensor<T> {
     type Output = Self;
 
     fn add(self, rhs: Self) -> Self::Output {
-        // TODO: broadcast apply
-        self.zip(&rhs, |x, y| x + y)
+        self.broadcasted_zip(&rhs, |x, y| x + y)
     }
 }
 
@@ -62,8 +61,7 @@ impl<T: Num> std::ops::Add<&Tensor<T>> for Tensor<T> {
     type Output = Self;
 
     fn add(self, rhs: &Self) -> Self::Output {
-        // TODO: broadcast apply
-        self.zip(&rhs, |x, y| x + y)
+        self.broadcasted_zip(&rhs, |x, y| x + y)
     }
 }
 
@@ -205,11 +203,40 @@ impl<T: Num> Tensor<T> {
     }
 
     pub fn reshape(&self, shape: &[usize]) -> Self {
-        let shape: Shape = shape.into();
-        assert_numel!(self.shape.numel(), shape);
-        Tensor {
-            data: Arc::clone(&self.data),
-            shape,
+        assert_numel!(self.shape.numel(), shape.iter().product(), shape);
+        if self.shape.is_contiguous() {
+            let shape: Shape = shape.into();
+            return Tensor {
+                data: Arc::clone(&self.data),
+                shape,
+            };
+        } else {
+            if self.shape.strides.iter().any(|&x| x != 0) {
+                // TODO: write a test case for this
+                // here at least 1 dim of the strides vec is 0 or
+                // it may be just that the strides don't match at all
+                // take a look at https://github.com/kurtschelfthout/tensorken/blob/main/src/shape_strider.rs#L151
+                // on when we need to copy data
+                // case 1:
+                //     if few dims of strides are 0, i.e i've expanded on a tensor from (1, 6) ->
+                //     (3, 6) and now i want to reshape it to (2, 3, 3). now i can't really figure
+                //     out where the 0 should go in the new strides vec for all cases. and i don't
+                //     think there is a way to reshape without copying the data in this case (not sure tho).
+                //     just checked with numpy, and it does copy the data
+                let reshape_tensor = self.contiguous();
+                reshape_tensor.reshape(&shape)
+            } else {
+                // all elems of strides are 0
+                let shape = Shape {
+                    shape: shape.to_vec(),
+                    strides: vec![0; shape.len()],
+                    offset: 0,
+                };
+                return Tensor {
+                    data: Arc::clone(&self.data),
+                    shape,
+                };
+            }
         }
     }
 
@@ -270,6 +297,7 @@ impl<T: Num> Tensor<T> {
         }
 
         if self.shape.ndim() == other.shape.ndim() {
+            dbg!(&self.shape.shape, &other.shape.shape);
             let new_shape = self
                 .shape()
                 .iter()
@@ -277,7 +305,7 @@ impl<T: Num> Tensor<T> {
                 .map(|(&x, &y)| std::cmp::max(x, y))
                 .collect::<Vec<usize>>();
             let expanded_self = self.expand_to(&new_shape);
-            let expanded_other = self.expand_to(&new_shape);
+            let expanded_other = other.expand_to(&new_shape);
             return expanded_self.zip(&expanded_other, f);
         }
 
@@ -288,9 +316,9 @@ impl<T: Num> Tensor<T> {
             new_shape.extend_from_slice(self.shape());
             return self.reshape(&new_shape).broadcasted_zip(&other, f);
         } else {
-            // TODO: hopefully the arguments are interchangeable
+            // here self.shape.ndim() > other.shape.ndim()
             new_shape.extend_from_slice(other.shape());
-            return other.reshape(&new_shape).broadcasted_zip(&self, f);
+            other.reshape(&new_shape).broadcasted_zip(&self, f)
         }
     }
 
@@ -344,6 +372,7 @@ impl<'a, T: Num> Iterator for TensorIterator<'a, T> {
     type Item = T;
 
     fn next(&mut self) -> Option<Self::Item> {
+        dbg!(&self.tensor.shape, &self.tensor.data[..1]);
         self.index_iter
             .next()
             .map(|index| self.tensor.data[self.tensor.shape.get_buffer_idx(&index)])
@@ -502,5 +531,29 @@ mod tests {
         ];
         assert_eq!(sum_tensor.shape(), &[3, 4, 1]);
         assert_eq!(Arc::try_unwrap(sum_tensor.data).unwrap(), sum_vec);
+    }
+
+    #[test]
+    fn test_tensor_broadcast() {
+        // let x = Tensor::<f32>::zeros(&[1, 3]);
+        // let y = Tensor::<f32>::ones(&[3, 1]);
+        // let broadcast_tensor = x + y;
+        // assert_eq!(broadcast_tensor.shape(), &[3, 3]);
+        // assert_eq!(broadcast_tensor.ravel(), vec![1.0; 9]);
+
+        let x = Tensor::<f32>::zeros(&[5, 3, 1]);
+        let y = Tensor::<f32>::ones(&[3, 1]);
+        let broadcast_tensor = x + y;
+        // TODO: implement for something like this: &x + &y;
+
+        assert_eq!(broadcast_tensor.shape(), &[5, 3, 1]);
+        assert_eq!(broadcast_tensor.ravel(), vec![1.0; 15]);
+
+        // let x = Tensor::<f32>::zeros(&[5, 3, 1]);
+        // let y = Tensor::<f32>::ones(&[3, 1]);
+        // let broadcast_tensor = y + x;
+
+        // assert_eq!(broadcast_tensor.shape(), &[5, 3, 1]);
+        // assert_eq!(broadcast_tensor.ravel(), vec![1.0; 15]);
     }
 }
