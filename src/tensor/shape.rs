@@ -108,13 +108,17 @@ impl Shape {
     // Reduces the given dimension to 1. For eg, let's say we want reduce the dimension 0 from the
     // shape [x, y, z]. This method turns the shape [x, y, z] => [1, y, z] with appropriate
     // strides.
-    pub(crate) fn reduce_dim(&self, dim: usize) -> Self {
+    pub(crate) fn reduce_dim(&self, dim: usize) -> (Self, Self) {
         assert_dim!(dim, self.ndim());
         let mut reduced_shape = self.shape.clone();
         reduced_shape[dim] = 1;
+
         let mut reduced_shape = Shape::new(&reduced_shape);
-        reduced_shape.strides[dim] = 0;
-        reduced_shape
+        reduced_shape.strides[dim] = 1;
+
+        let mut stride_shape = reduced_shape.clone();
+        stride_shape.strides[dim] = 0;
+        (reduced_shape, stride_shape)
     }
 
     pub(crate) fn squeeze(&self) -> Self {

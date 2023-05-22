@@ -72,7 +72,7 @@ impl<T: Num> std::ops::Add<&Tensor<T>> for Tensor<T> {
 impl<T: Num> std::ops::Add<Tensor<T>> for &Tensor<T> {
     type Output = Tensor<T>;
 
-    fn add(self, rhs: Tensor<T>) -> Tensor<T> {
+    fn add(self, rhs: Tensor<T>) -> Self::Output {
         self.broadcasted_zip(&rhs, |x, y| x + y)
     }
 }
@@ -86,7 +86,7 @@ impl<T: Num> std::ops::Add<Tensor<T>> for Tensor<T> {
 }
 
 impl<T: Num> std::ops::Add<T> for Tensor<T> {
-    type Output = Self;
+    type Output = Tensor<T>;
 
     fn add(self, rhs: T) -> Self::Output {
         let mut add_vec = (*self.data).clone();
@@ -160,19 +160,18 @@ impl<T: Num> Tensor<T> {
     }
 
     #[inline]
-    pub fn shallow_clone(&self) -> Self {
+    pub fn clone(&self) -> Self {
         Self {
             // https://stackoverflow.com/a/55750742
-            data: Arc::clone(&self.data),
+            data: Arc::new((*self.data).clone()),
             shape: self.shape.clone(),
         }
     }
 
     #[inline]
-    pub fn clone(&self) -> Self {
+    pub fn shallow_clone(&self) -> Self {
         Self {
-            // https://stackoverflow.com/a/55750742
-            data: Arc::new((*self.data).clone()),
+            data: Arc::clone(&self.data),
             shape: self.shape.clone(),
         }
     }
@@ -242,18 +241,18 @@ impl<T: Num> Tensor<T> {
         reshape_tensor.reshape(&shape)
     }
 
+    pub fn expand_to(&self, dims: &[usize]) -> Self {
+        Tensor {
+            data: Arc::clone(&self.data),
+            shape: self.shape.expand_to(dims),
+        }
+    }
+
     pub fn expand(&self, dim: usize, to: usize) -> Self {
         let shape = self.shape.expand(dim, to);
         Self {
             data: Arc::clone(&self.data),
             shape,
-        }
-    }
-
-    pub fn expand_to(&self, dims: &[usize]) -> Self {
-        Tensor {
-            data: Arc::clone(&self.data),
-            shape: self.shape.expand_to(dims),
         }
     }
 
@@ -330,14 +329,12 @@ impl<T: Num> Tensor<T> {
         match dim.into() {
             Some(dim) => {
                 assert_dim!(dim, self.shape.ndim());
-                let mut reduced_shape = self.shape.reduce_dim(dim);
+                let (reduced_shape, stride_shape) = self.shape.reduce_dim(dim);
                 let mut sum_buffer = vec![T::zero(); reduced_shape.numel()];
                 for index in self.shape.index_iter() {
-                    sum_buffer[reduced_shape.get_buffer_idx(&index)] +=
+                    sum_buffer[stride_shape.get_buffer_idx(&index)] +=
                         self.data[self.shape.get_buffer_idx(&index)];
                 }
-                // TODO: do i really need to change the stride here?
-                reduced_shape.strides[dim] = 1;
                 Self {
                     data: Arc::new(sum_buffer),
                     shape: reduced_shape,
