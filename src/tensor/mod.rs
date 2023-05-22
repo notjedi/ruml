@@ -216,6 +216,7 @@ impl<T: Num> Tensor<T> {
                 // here at least 1 dim of the strides vec is 0 or
                 // it may be just that the strides don't match at all
                 // take a look at https://github.com/kurtschelfthout/tensorken/blob/main/src/shape_strider.rs#L151
+                // see also https://github.com/numpy/numpy/blob/ac3baf5e229a502b43042c570d4d79e92702669a/numpy/core/src/multiarray/shape.c#L371
                 // on when we need to copy data
                 // case 1:
                 //     if few dims of strides are 0, i.e i've expanded on a tensor from (1, 6) ->

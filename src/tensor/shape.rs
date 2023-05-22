@@ -1,7 +1,7 @@
 use core::panic;
 use std::assert_eq;
 
-use crate::assert_dim;
+use crate::{assert_dim, assert_numel};
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct Shape {
@@ -141,6 +141,102 @@ impl Shape {
             strides,
             offset: 0,
         }
+    }
+
+    pub(crate) fn attempt_reshape_without_copying(
+        &self,
+        new_shape: &[usize],
+    ) -> Result<Self, String> {
+        // function to check if tensor can be reshaped without copying
+        assert_numel!(self.numel(), new_shape.iter().product(), new_shape);
+
+        // squeeze the current shape, cause axes with dim 1 won't have any effect on the final
+        // shape and strides and only adds to complexity.
+        let self_squeezed = self.squeeze();
+
+        let old_ndim = self_squeezed.ndim();
+        let old_shape = self_squeezed.shape;
+        let old_strides = self_squeezed.strides;
+
+        let new_ndim = new_shape.len();
+        let new_shape = new_shape.to_vec();
+        let mut new_strides = Vec::with_capacity(new_ndim);
+
+        let (mut new_start, mut new_end) = (0, 1);
+        let (mut old_start, mut old_end) = (0, 1);
+
+        // iterate through both new and old shape at least till we exhaust one of them
+        while new_start < new_ndim && old_start < old_ndim {
+            let mut new_numel = new_shape[new_start];
+            let mut old_numel = old_shape[old_start];
+
+            // NOTE: this loop will always stop because we asserted that the numels for both
+            // new and old shape are the same at the start of this function.
+            // Greedily match the number of elements of both old and new shape
+            while new_numel != old_numel {
+                if new_numel < old_numel {
+                    new_numel *= new_shape[new_end];
+                    new_end += 1;
+                } else {
+                    // here: new_numel > old_numel
+                    old_numel *= old_shape[old_end];
+                    old_end += 1;
+                }
+            }
+
+            // check if the "sub-shape" from old shape is contiguous
+            // old_end is 1 + the len of old "sub-shape"
+            for dim in old_start..old_end - 1 {
+                if old_strides[dim] != old_strides[dim + 1] * old_shape[dim + 1] {
+                    // not contiguous, need to copy data.
+                    return Err(format!(
+                        "cannot reshape {:?} to {:?} without copying data",
+                        self.shape, new_shape
+                    ));
+                }
+            }
+
+            // "sub-shape" is contiguous, populate strides for new_shape from (new_start..new_end - 1)
+            // new_end is 1 + the len of new "sub-shape"
+            new_strides[new_end - 1] = old_strides[old_end - 1];
+            for dim in (new_start..new_end - 1).rev() {
+                new_strides[dim] = new_strides[dim + 1] * new_shape[dim + 1];
+            }
+            // is this more efficient? only 1 sub op instead of 2 add ops. not that it
+            // matters in anyway, but just curious what the machine code would be
+            // for dim in (new_start + 1..new_end).rev() {
+            //     new_strides[dim - 1] = new_strides[dim] * new_shape[dim];
+            // }
+
+            old_start = old_end;
+            old_end += 1;
+            new_start = new_end;
+            new_end += 1;
+        }
+
+        // TODO: if, we get here i think new_start is always >= 1, cause it's set to new_end at the
+        // end of prev loop, unless new_start >= new_ndim && old_start >= old_ndim, which
+        // definitely is not the case here. so it should always be >= 1. make sure once again and
+        // update this.
+        // let last_stride = new_strides[new_start - 1];
+        let last_stride = if new_start >= 1 {
+            new_strides[new_start - 1]
+        } else {
+            1
+        };
+        // we skip through `new_start` items, cause new_start was set to new_end at the end of the
+        // previous loop. it can also be new_end - 1 instead of new_start
+        // all remaining elems are dims with 1.
+        // TODO: do we need .take(new_ndim) before the .skip()? i don't think so.
+        new_strides.iter_mut().skip(new_start).for_each(|x| {
+            *x = last_stride;
+        });
+
+        Ok(Shape {
+            shape: new_shape,
+            strides: new_strides,
+            offset: self.offset,
+        })
     }
 
     pub(crate) fn expand_to(&self, dims: &[usize]) -> Self {
