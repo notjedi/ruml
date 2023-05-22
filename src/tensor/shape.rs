@@ -202,11 +202,6 @@ impl Shape {
             for dim in (new_start..new_end - 1).rev() {
                 new_strides[dim] = new_strides[dim + 1] * new_shape[dim + 1];
             }
-            // is this more efficient? only 1 sub op instead of 2 add ops. not that it
-            // matters in anyway, but just curious what the machine code would be
-            // for dim in (new_start + 1..new_end).rev() {
-            //     new_strides[dim - 1] = new_strides[dim] * new_shape[dim];
-            // }
 
             old_start = old_end;
             old_end += 1;
@@ -214,20 +209,10 @@ impl Shape {
             new_end += 1;
         }
 
-        // TODO: if, we get here i think new_start is always >= 1, cause it's set to new_end at the
-        // end of prev loop, unless new_start >= new_ndim && old_start >= old_ndim, which
-        // definitely is not the case here. so it should always be >= 1. make sure once again and
-        // update this.
-        // let last_stride = new_strides[new_start - 1];
-        let last_stride = if new_start >= 1 {
-            new_strides[new_start - 1]
-        } else {
-            1
-        };
+        let last_stride = new_strides[new_start - 1];
         // we skip through `new_start` items, cause new_start was set to new_end at the end of the
         // previous loop. it can also be new_end - 1 instead of new_start
         // all remaining elems are dims with 1.
-        // TODO: do we need .take(new_ndim) before the .skip()? i don't think so.
         new_strides.iter_mut().skip(new_start).for_each(|x| {
             *x = last_stride;
         });
@@ -410,15 +395,7 @@ mod tests {
 
     #[test]
     fn test_attempt_reshape_without_copying() {
-        let shape = Shape {
-            shape: vec![8, 5],
-            strides: vec![0, 1],
-            offset: 0,
-        };
-        let attempt_reshape = shape.attempt_reshape_without_copying(&[4, 2, 5]);
-        assert_eq!(attempt_reshape.unwrap().strides, &[0, 0, 1]);
-
-        // let shape: Shape = vec![4, 3, 2].into();
+        // normal shape = contiguous
         let shape = Shape {
             shape: vec![4, 3, 2],
             strides: vec![6, 2, 1],
@@ -427,38 +404,7 @@ mod tests {
         let attempt_reshape = shape.attempt_reshape_without_copying(&[4, 1, 3, 2]);
         assert_eq!(attempt_reshape.unwrap().strides, &[6, 6, 2, 1]);
 
-        let shape = Shape {
-            shape: vec![4, 3, 2],
-            strides: vec![2, 0, 1],
-            offset: 0,
-        };
-        let attempt_reshape = shape.attempt_reshape_without_copying(&[4, 3, 1, 2]);
-        assert_eq!(attempt_reshape.unwrap().strides, &[2, 0, 2, 1]);
-
-        let shape = Shape {
-            shape: vec![3, 6],
-            strides: vec![0, 1],
-            offset: 0,
-        };
-        let attempt_reshape = shape.attempt_reshape_without_copying(&[2, 3, 3]);
-        assert!(attempt_reshape.is_err());
-
-        let shape = Shape {
-            shape: vec![3, 6],
-            strides: vec![0, 1],
-            offset: 0,
-        };
-        let attempt_reshape = shape.attempt_reshape_without_copying(&[3, 2, 3]);
-        assert_eq!(attempt_reshape.unwrap().strides, &[0, 3, 1]);
-
-        let shape = Shape {
-            shape: vec![6],
-            strides: vec![0],
-            offset: 0,
-        };
-        let attempt_reshape = shape.attempt_reshape_without_copying(&[1, 1, 6]);
-        assert_eq!(attempt_reshape.unwrap().strides, &[0, 0, 0]);
-
+        // normal shape = contiguous
         let shape = Shape {
             shape: vec![3, 27],
             strides: vec![27, 1],
@@ -467,6 +413,7 @@ mod tests {
         let attempt_reshape = shape.attempt_reshape_without_copying(&[3, 3, 3, 3]);
         assert_eq!(attempt_reshape.unwrap().strides, &[27, 9, 3, 1]);
 
+        // normal shape = contiguous, with trailing 1's in new_shape
         let shape = Shape {
             shape: vec![3, 27],
             strides: vec![27, 1],
@@ -474,5 +421,60 @@ mod tests {
         };
         let attempt_reshape = shape.attempt_reshape_without_copying(&[3, 3, 3, 3, 1]);
         assert_eq!(attempt_reshape.unwrap().strides, &[27, 9, 3, 1, 1]);
+
+        // expanded at dim 0
+        let shape = Shape {
+            shape: vec![8, 5],
+            strides: vec![0, 1],
+            offset: 0,
+        };
+        let attempt_reshape = shape.attempt_reshape_without_copying(&[4, 2, 5]);
+        assert_eq!(attempt_reshape.unwrap().strides, &[0, 0, 1]);
+
+        // expanded at dim 0
+        let shape = Shape {
+            shape: vec![3, 6],
+            strides: vec![0, 1],
+            offset: 0,
+        };
+        let attempt_reshape = shape.attempt_reshape_without_copying(&[2, 3, 3]);
+        assert!(attempt_reshape.is_err());
+
+        // expanded at dim 0
+        let shape = Shape {
+            shape: vec![3, 6],
+            strides: vec![0, 1],
+            offset: 0,
+        };
+        let attempt_reshape = shape.attempt_reshape_without_copying(&[3, 2, 3]);
+        assert_eq!(attempt_reshape.unwrap().strides, &[0, 3, 1]);
+
+        // expanded at dim 0
+        let shape = Shape {
+            shape: vec![6],
+            strides: vec![0],
+            offset: 0,
+        };
+        let attempt_reshape = shape.attempt_reshape_without_copying(&[1, 1, 6]);
+        assert_eq!(attempt_reshape.unwrap().strides, &[0, 0, 0]);
+
+        // expanded at dim 1
+        let shape = Shape {
+            shape: vec![4, 3, 2],
+            strides: vec![2, 0, 1],
+            offset: 0,
+        };
+        let attempt_reshape = shape.attempt_reshape_without_copying(&[4, 3, 1, 2]);
+        assert_eq!(attempt_reshape.unwrap().strides, &[2, 0, 2, 1]);
+
+        // transpose or permute
+        let shape = Shape {
+            shape: vec![4, 3, 2],
+            strides: vec![6, 2, 1],
+            offset: 0,
+        }
+        .permute(&[2, 1, 0]);
+        let attempt_reshape = shape.attempt_reshape_without_copying(&[4, 1, 3, 2]);
+        assert!(attempt_reshape.is_err());
     }
 }
