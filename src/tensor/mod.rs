@@ -204,41 +204,14 @@ impl<T: Num> Tensor<T> {
 
     pub fn reshape(&self, shape: &[usize]) -> Self {
         assert_numel!(self.shape.numel(), shape.iter().product(), shape);
-        if self.shape.is_contiguous() {
-            let shape: Shape = shape.into();
+        if let Ok(shape) = self.shape.attempt_reshape_without_copying(shape) {
             return Tensor {
                 data: Arc::clone(&self.data),
                 shape,
             };
-        } else {
-            if self.shape.strides.iter().any(|&x| x != 0) {
-                // TODO: write a test case for this
-                // here at least 1 dim of the strides vec is 0 or
-                // it may be just that the strides don't match at all
-                // take a look at https://github.com/kurtschelfthout/tensorken/blob/main/src/shape_strider.rs#L151
-                // see also https://github.com/numpy/numpy/blob/ac3baf5e229a502b43042c570d4d79e92702669a/numpy/core/src/multiarray/shape.c#L371
-                // on when we need to copy data
-                // case 1:
-                //     if few dims of strides are 0, i.e i've expanded on a tensor from (1, 6) ->
-                //     (3, 6) and now i want to reshape it to (2, 3, 3). now i can't really figure
-                //     out where the 0 should go in the new strides vec for all cases. and i don't
-                //     think there is a way to reshape without copying the data in this case (not sure tho).
-                //     just checked with numpy, and it does copy the data
-                let reshape_tensor = self.contiguous();
-                reshape_tensor.reshape(&shape)
-            } else {
-                // all elems of strides are 0
-                let shape = Shape {
-                    shape: shape.to_vec(),
-                    strides: vec![0; shape.len()],
-                    offset: 0,
-                };
-                return Tensor {
-                    data: Arc::clone(&self.data),
-                    shape,
-                };
-            }
         }
+        let reshape_tensor = self.contiguous();
+        reshape_tensor.reshape(&shape)
     }
 
     pub fn expand(&self, dim: usize, to: usize) -> Self {

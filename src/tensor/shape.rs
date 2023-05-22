@@ -139,7 +139,7 @@ impl Shape {
         Self {
             shape,
             strides,
-            offset: 0,
+            offset: self.offset,
         }
     }
 
@@ -148,6 +148,7 @@ impl Shape {
         new_shape: &[usize],
     ) -> Result<Self, String> {
         // function to check if tensor can be reshaped without copying
+        // see https://github.com/numpy/numpy/blob/ac3baf5e229a502b43042c570d4d79e92702669a/numpy/core/src/multiarray/shape.c#L371
         assert_numel!(self.numel(), new_shape.iter().product(), new_shape);
 
         // squeeze the current shape, cause axes with dim 1 won't have any effect on the final
@@ -249,7 +250,7 @@ impl Shape {
         Shape {
             shape,
             strides,
-            offset: 0,
+            offset: self.offset,
         }
     }
 
@@ -289,7 +290,7 @@ impl Shape {
         Self {
             shape,
             strides,
-            offset: 0,
+            offset: self.offset,
         }
     }
 
