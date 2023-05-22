@@ -20,8 +20,9 @@ impl Backend for CpuBackend {
 mod tests {
     use super::CpuBackend;
 
-    #[test]
-    #[ignore = "unimplemented"]
+    // #[test]
+    // #[ignore = "unimplemented"]
+    #[allow(dead_code)]
     fn test_matmul() {
         crate::backend::tests::test_matmul::<CpuBackend>();
     }

@@ -49,18 +49,38 @@ impl<T: Num> Debug for Tensor<T> {
     }
 }
 
-impl<T: Num> std::ops::Add for Tensor<T> {
-    type Output = Self;
+// TODO: impl<T: Num> std::ops::Add<&Tensor<T>> for &mut Tensor<T> {
+// TODO: impl<T: Num> std::ops::Add<Tensor<T>> for &mut Tensor<T> {
+// TODO: impl<T: Num> std::ops::Add<T> for &mut Tensor<T>
 
-    fn add(self, rhs: Self) -> Self::Output {
+impl<T: Num> std::ops::Add<&Tensor<T>> for &Tensor<T> {
+    type Output = Tensor<T>;
+
+    fn add(self, rhs: &Tensor<T>) -> Self::Output {
         self.broadcasted_zip(&rhs, |x, y| x + y)
     }
 }
 
 impl<T: Num> std::ops::Add<&Tensor<T>> for Tensor<T> {
-    type Output = Self;
+    type Output = Tensor<T>;
 
-    fn add(self, rhs: &Self) -> Self::Output {
+    fn add(self, rhs: &Tensor<T>) -> Self::Output {
+        self.broadcasted_zip(&rhs, |x, y| x + y)
+    }
+}
+
+impl<T: Num> std::ops::Add<Tensor<T>> for &Tensor<T> {
+    type Output = Tensor<T>;
+
+    fn add(self, rhs: Tensor<T>) -> Tensor<T> {
+        self.broadcasted_zip(&rhs, |x, y| x + y)
+    }
+}
+
+impl<T: Num> std::ops::Add<Tensor<T>> for Tensor<T> {
+    type Output = Tensor<T>;
+
+    fn add(self, rhs: Tensor<T>) -> Self::Output {
         self.broadcasted_zip(&rhs, |x, y| x + y)
     }
 }
@@ -130,14 +150,22 @@ impl<T: Num> Tensor<T> {
 
     #[inline]
     pub fn flatten(&self) -> Self {
-        // if self.data.len() != self.shape.numel() {
         if self.shape.is_contiguous() {
             // BUG(FIXED): let's say i expand a tensor from shape (3, 1) -> (3, 3).
             // then self.shape.numel() would be = 9. but the len of the actual data buffer would be 3.
             // so just copy data to new buffer if the actual buffer len and shape.numel don't match.
-            return self.contiguous().reshape(&[self.shape.numel()]);
+            return self.reshape(&[self.shape.numel()]);
         }
-        self.reshape(&[self.shape.numel()])
+        self.contiguous().reshape(&[self.shape.numel()])
+    }
+
+    #[inline]
+    pub fn shallow_clone(&self) -> Self {
+        Self {
+            // https://stackoverflow.com/a/55750742
+            data: Arc::clone(&self.data),
+            shape: self.shape.clone(),
+        }
     }
 
     #[inline]
@@ -271,7 +299,6 @@ impl<T: Num> Tensor<T> {
         }
 
         if self.shape.ndim() == other.shape.ndim() {
-            dbg!(&self.shape.shape, &other.shape.shape);
             let new_shape = self
                 .shape()
                 .iter()
@@ -346,7 +373,6 @@ impl<'a, T: Num> Iterator for TensorIterator<'a, T> {
     type Item = T;
 
     fn next(&mut self) -> Option<Self::Item> {
-        dbg!(&self.tensor.shape, &self.tensor.data[..1]);
         self.index_iter
             .next()
             .map(|index| self.tensor.data[self.tensor.shape.get_buffer_idx(&index)])
@@ -482,7 +508,7 @@ mod tests {
     //     let tensor: Tensor<f32> = Tensor::arange(shape.numel())
     //         .reshape(&shape.shape)
     //         .expand(1, 4);
-    //     let tensor: Vec<_> = tensor.ravel();
+    //     let tensor: Vec<_> = tensor.flatten();
     //     TODO: add tests for flatten after expanding
     //     // assert!(false);
     // }
@@ -509,25 +535,20 @@ mod tests {
 
     #[test]
     fn test_tensor_broadcast() {
-        // let x = Tensor::<f32>::zeros(&[1, 3]);
-        // let y = Tensor::<f32>::ones(&[3, 1]);
-        // let broadcast_tensor = x + y;
-        // assert_eq!(broadcast_tensor.shape(), &[3, 3]);
-        // assert_eq!(broadcast_tensor.ravel(), vec![1.0; 9]);
+        let x = Tensor::<f32>::zeros(&[1, 3]);
+        let y = Tensor::<f32>::ones(&[3, 1]);
+        let broadcast_tensor = x + y;
+        assert_eq!(broadcast_tensor.shape(), &[3, 3]);
+        assert_eq!(broadcast_tensor.ravel(), vec![1.0; 9]);
 
         let x = Tensor::<f32>::zeros(&[5, 3, 1]);
         let y = Tensor::<f32>::ones(&[3, 1]);
-        let broadcast_tensor = x + y;
-        // TODO: implement for something like this: &x + &y;
-
+        let broadcast_tensor = &x + &y;
         assert_eq!(broadcast_tensor.shape(), &[5, 3, 1]);
         assert_eq!(broadcast_tensor.ravel(), vec![1.0; 15]);
 
-        // let x = Tensor::<f32>::zeros(&[5, 3, 1]);
-        // let y = Tensor::<f32>::ones(&[3, 1]);
-        // let broadcast_tensor = y + x;
-
-        // assert_eq!(broadcast_tensor.shape(), &[5, 3, 1]);
-        // assert_eq!(broadcast_tensor.ravel(), vec![1.0; 15]);
+        let broadcast_tensor = &y + &x;
+        assert_eq!(broadcast_tensor.shape(), &[5, 3, 1]);
+        assert_eq!(broadcast_tensor.ravel(), vec![1.0; 15]);
     }
 }
