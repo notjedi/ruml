@@ -123,11 +123,38 @@ where
 }
 
 // TODO: get around to implement mut iter for tensor
-// TODO: naive reduce functions
+//
+// reduce funcs
+// TODO: max
+// TODO: min
+//
+// zip funcs (should this be broadcasted_zip?)
+// TODO: element-wise eq
+// TODO: element-wise nq
+//
+// binary ops
+// TODO: sub
+// TODO: div
+// TODO: mul
+// TODO: neg
+//
+// tensor funcs
+// TODO: eye
+// TODO: tril
+// TODO: random?
+// TODO: linspace?
+// TODO: ones_like?
+// TODO: zeros_like?
+// TODO: constant_like?
+//
+// TODO: pad?
+// TODO: crop?
+// TODO: to_tensor_mut?
+// TODO: fused_zip_reduce?
 
-/// we only support channel last memory format
-/// see <https://pytorch.org/blog/tensor-memory-format-matters> for details
-/// <https://ajcr.net/stride-guide-part-1>
+// we only support channel last memory format see
+// https://pytorch.org/blog/tensor-memory-format-matters for details
+// https://ajcr.net/stride-guide-part-1
 
 impl<T> Tensor<T>
 where
@@ -259,7 +286,7 @@ where
     pub fn reshape(&self, shape: &[usize]) -> Self {
         assert_numel!(self.shape.numel(), shape.iter().product(), shape);
         if let Ok(shape) = self.shape.attempt_reshape_without_copying(shape) {
-            return Tensor {
+            return Self {
                 data: Arc::clone(&self.data),
                 shape,
             };
@@ -269,7 +296,7 @@ where
     }
 
     pub fn expand_to(&self, dims: &[usize]) -> Self {
-        Tensor {
+        Self {
             data: Arc::clone(&self.data),
             shape: self.shape.expand_to(dims),
         }
@@ -297,6 +324,14 @@ where
             tensor: self,
             iter_dim: dim,
             dim_idx: 0,
+        }
+    }
+
+    pub fn map(&self, f: impl Fn(T) -> T) -> Self {
+        let map_data = (*self.data).iter().map(|&x| f(x)).collect::<Vec<T>>();
+        Self {
+            data: Arc::new(map_data),
+            shape: self.shape.clone(),
         }
     }
 
@@ -372,6 +407,44 @@ where
                 Self::new(sum)
             }
         }
+    }
+}
+
+impl<T> Tensor<T>
+where
+    T: num_traits::Float + num_traits::NumAssignOps + std::fmt::Debug,
+{
+    pub fn log(&self) -> Self {
+        self.map(|x| x.ln())
+    }
+
+    pub fn log2(&self) -> Self {
+        self.map(|x| x.log2())
+    }
+
+    pub fn log10(&self) -> Self {
+        self.map(|x| x.log10())
+    }
+
+    pub fn exp(&self) -> Self {
+        self.map(|x| x.exp())
+    }
+
+    pub fn powf(&self, pow: T) -> Self {
+        self.map(|x| x.powf(pow))
+    }
+
+    pub fn powi(&self, pow: i32) -> Self {
+        self.map(|x| x.powi(pow))
+    }
+}
+
+impl<T> Tensor<T>
+where
+    T: num_traits::PrimInt + num_traits::NumAssignOps + std::fmt::Debug,
+{
+    pub fn pow(&self, pow: u32) -> Self {
+        self.map(|x| x.pow(pow))
     }
 }
 
