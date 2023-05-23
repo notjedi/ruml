@@ -1,5 +1,8 @@
 mod shape;
 
+use rand::Rng;
+use rand_distr::{Distribution, StandardNormal};
+
 pub use self::shape::{Shape, TensorIndexIterator};
 use crate::{assert_dim, assert_numel};
 use std::{
@@ -57,10 +60,6 @@ where
         )
     }
 }
-
-// TODO: impl<T: Num> std::ops::Add<&Tensor<T>> for &mut Tensor<T> {
-// TODO: impl<T: Num> std::ops::Add<Tensor<T>> for &mut Tensor<T> {
-// TODO: impl<T: Num> std::ops::Add<T> for &mut Tensor<T>
 
 impl<T> std::ops::Add<&Tensor<T>> for &Tensor<T>
 where
@@ -122,7 +121,12 @@ where
     }
 }
 
+// TODO: impl<T: Num> std::ops::Add<&Tensor<T>> for &mut Tensor<T> {
+// TODO: impl<T: Num> std::ops::Add<Tensor<T>> for &mut Tensor<T> {
+// TODO: impl<T: Num> std::ops::Add<T> for &mut Tensor<T>
 // TODO: get around to implement mut iter for tensor
+//
+// TODO: should i make *_like methods as object methods instead of class methods?
 //
 // reduce funcs
 // TODO: max
@@ -180,8 +184,30 @@ where
         }
     }
 
+    // TODO: eye
+    // TODO: tril
+    // TODO: linspace
+
+    pub fn randn<R>(shape: &[usize], rng: &mut R) -> Self
+    where
+        R: Rng,
+        // TODO : what does this bound mean?
+        // do i need to include ?Sized for R like this: R: Rng + ?Sized,
+        StandardNormal: Distribution<T>,
+    {
+        let shape: Shape = shape.into();
+        let mut data: Vec<T> = Vec::with_capacity(shape.numel());
+        for _ in 0..shape.numel() {
+            data.push(rng.sample(StandardNormal));
+        }
+        Self {
+            data: Arc::new(data),
+            shape,
+        }
+    }
+
     // lazy init of tensor with value
-    pub fn full(value: T, shape: &[usize]) -> Self {
+    pub fn constant(value: T, shape: &[usize]) -> Self {
         let data = vec![value; 1];
         let shape = Shape {
             shape: shape.to_vec(),
@@ -194,12 +220,24 @@ where
         }
     }
 
+    pub fn constant_like(value: T, other: &Self) -> Self {
+        Self::constant(value, &other.shape.shape)
+    }
+
     pub fn zeros(shape: &[usize]) -> Self {
-        Self::full(T::zero(), shape)
+        Self::constant(T::zero(), shape)
+    }
+
+    pub fn zeros_like(other: &Self) -> Self {
+        Self::zeros(&other.shape.shape)
     }
 
     pub fn ones(shape: &[usize]) -> Self {
-        Self::full(T::one(), shape)
+        Self::constant(T::one(), shape)
+    }
+
+    pub fn ones_like(other: &Self) -> Self {
+        Self::ones(&other.shape.shape)
     }
 
     #[inline]
@@ -518,6 +556,8 @@ where
 
 #[cfg(test)]
 mod tests {
+    use rand::{rngs::StdRng, SeedableRng};
+
     use super::*;
 
     #[test]
@@ -662,5 +702,16 @@ mod tests {
         let broadcast_tensor = &y + &x;
         assert_eq!(broadcast_tensor.shape(), &[5, 3, 1]);
         assert_eq!(broadcast_tensor.ravel(), vec![1.0; 15]);
+    }
+
+    #[test]
+    fn test_randn() {
+        let mut rng = StdRng::seed_from_u64(0u64);
+        let tensor = Tensor::<f32>::randn(&[3, 2], &mut rng);
+        assert_eq!(tensor.shape(), &[3, 2]);
+        assert_eq!(
+            tensor.ravel(),
+            [0.712813, 0.85833144, -2.4362438, 0.16334426, -1.2750102, 1.287171]
+        );
     }
 }

@@ -12,4 +12,6 @@ keywords = ["tensor", "tensor-library", "machine-learning"]
 
 
 [dependencies]
+rand = "0.8"
 num-traits = "0.2"
+rand_distr = "0.4"
