@@ -97,6 +97,7 @@ impl Shape {
 
     // Removes a dimension from the shape. For eg, let's say we want remove the dimension 1 from
     // the shape [x, y, z]. This method turns the shape [x, y, z] => [x, z] with appropriate strides.
+    #[inline]
     pub(crate) fn remove_dim(&self, dim: usize) -> Self {
         assert_dim!(dim, self.ndim());
         let mut shape = self.clone();
@@ -108,6 +109,7 @@ impl Shape {
     // Reduces the given dimension to 1. For eg, let's say we want reduce the dimension 0 from the
     // shape [x, y, z]. This method turns the shape [x, y, z] => [1, y, z] with appropriate
     // strides.
+    #[inline]
     pub(crate) fn reduce_dim(&self, dim: usize) -> (Self, Self) {
         assert_dim!(dim, self.ndim());
         let mut reduced_shape = self.shape.clone();

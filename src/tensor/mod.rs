@@ -26,18 +26,27 @@ impl<T> Num for T where
 }
 
 #[derive(Eq, PartialEq)]
-pub struct Tensor<T: Num> {
+pub struct Tensor<T>
+where
+    T: Num,
+{
     data: Arc<Vec<T>>,
     shape: Shape,
 }
 
-impl<T: Num> Display for Tensor<T> {
+impl<T> Display for Tensor<T>
+where
+    T: Num,
+{
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "Tensor with shape {:?}", self.shape.shape)
     }
 }
 
-impl<T: Num> Debug for Tensor<T> {
+impl<T> Debug for Tensor<T>
+where
+    T: Num,
+{
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(
             f,
@@ -53,7 +62,10 @@ impl<T: Num> Debug for Tensor<T> {
 // TODO: impl<T: Num> std::ops::Add<Tensor<T>> for &mut Tensor<T> {
 // TODO: impl<T: Num> std::ops::Add<T> for &mut Tensor<T>
 
-impl<T: Num> std::ops::Add<&Tensor<T>> for &Tensor<T> {
+impl<T> std::ops::Add<&Tensor<T>> for &Tensor<T>
+where
+    T: Num,
+{
     type Output = Tensor<T>;
 
     fn add(self, rhs: &Tensor<T>) -> Self::Output {
@@ -61,7 +73,10 @@ impl<T: Num> std::ops::Add<&Tensor<T>> for &Tensor<T> {
     }
 }
 
-impl<T: Num> std::ops::Add<&Tensor<T>> for Tensor<T> {
+impl<T> std::ops::Add<&Tensor<T>> for Tensor<T>
+where
+    T: Num,
+{
     type Output = Tensor<T>;
 
     fn add(self, rhs: &Tensor<T>) -> Self::Output {
@@ -69,7 +84,10 @@ impl<T: Num> std::ops::Add<&Tensor<T>> for Tensor<T> {
     }
 }
 
-impl<T: Num> std::ops::Add<Tensor<T>> for &Tensor<T> {
+impl<T> std::ops::Add<Tensor<T>> for &Tensor<T>
+where
+    T: Num,
+{
     type Output = Tensor<T>;
 
     fn add(self, rhs: Tensor<T>) -> Self::Output {
@@ -77,7 +95,10 @@ impl<T: Num> std::ops::Add<Tensor<T>> for &Tensor<T> {
     }
 }
 
-impl<T: Num> std::ops::Add<Tensor<T>> for Tensor<T> {
+impl<T> std::ops::Add<Tensor<T>> for Tensor<T>
+where
+    T: Num,
+{
     type Output = Tensor<T>;
 
     fn add(self, rhs: Tensor<T>) -> Self::Output {
@@ -85,7 +106,10 @@ impl<T: Num> std::ops::Add<Tensor<T>> for Tensor<T> {
     }
 }
 
-impl<T: Num> std::ops::Add<T> for Tensor<T> {
+impl<T> std::ops::Add<T> for Tensor<T>
+where
+    T: Num,
+{
     type Output = Tensor<T>;
 
     fn add(self, rhs: T) -> Self::Output {
@@ -105,7 +129,10 @@ impl<T: Num> std::ops::Add<T> for Tensor<T> {
 /// see <https://pytorch.org/blog/tensor-memory-format-matters> for details
 /// <https://ajcr.net/stride-guide-part-1>
 
-impl<T: Num> Tensor<T> {
+impl<T> Tensor<T>
+where
+    T: Num,
+{
     pub fn new(data: Vec<T>) -> Self {
         let shape = Shape {
             shape: [data.len()].into(),
@@ -348,7 +375,10 @@ impl<T: Num> Tensor<T> {
     }
 }
 
-impl<'a, T: Num> IntoIterator for &'a Tensor<T> {
+impl<'a, T> IntoIterator for &'a Tensor<T>
+where
+    T: Num,
+{
     type Item = T;
     type IntoIter = TensorIterator<'a, T>;
 
@@ -361,12 +391,18 @@ impl<'a, T: Num> IntoIterator for &'a Tensor<T> {
 }
 
 #[derive(Debug)]
-pub struct TensorIterator<'a, T: Num> {
+pub struct TensorIterator<'a, T>
+where
+    T: Num,
+{
     tensor: &'a Tensor<T>,
     index_iter: TensorIndexIterator<'a>,
 }
 
-impl<'a, T: Num> Iterator for TensorIterator<'a, T> {
+impl<'a, T> Iterator for TensorIterator<'a, T>
+where
+    T: Num,
+{
     type Item = T;
 
     fn next(&mut self) -> Option<Self::Item> {
@@ -377,13 +413,19 @@ impl<'a, T: Num> Iterator for TensorIterator<'a, T> {
 }
 
 #[derive(Debug)]
-pub struct DimIterator<'a, T: Num> {
+pub struct DimIterator<'a, T>
+where
+    T: Num,
+{
     tensor: &'a Tensor<T>,
     iter_dim: usize,
     dim_idx: usize,
 }
 
-impl<'a, T: Num> Iterator for DimIterator<'a, T> {
+impl<'a, T> Iterator for DimIterator<'a, T>
+where
+    T: Num,
+{
     type Item = Tensor<T>;
 
     fn next(&mut self) -> Option<Self::Item> {
