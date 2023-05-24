@@ -184,15 +184,50 @@ where
         }
     }
 
-    // TODO: eye
-    // TODO: tril
-    // TODO: linspace
+    pub fn tril(dim: usize) -> Self {
+        let mut tril = vec![T::one(); dim * dim];
+        (0..dim).for_each(|i| {
+            (0..i).for_each(|j| {
+                let idx = j * dim + i;
+                tril[idx] = T::zero();
+            })
+        });
+        Self {
+            data: Arc::new(tril),
+            shape: vec![dim; 2].into(),
+        }
+    }
+
+    pub fn triu(dim: usize) -> Self {
+        let mut triu = vec![T::one(); dim * dim];
+        (0..dim).for_each(|i| {
+            (0..i).for_each(|j| {
+                let idx = i * dim + j;
+                triu[idx] = T::zero();
+            })
+        });
+        Self {
+            data: Arc::new(triu),
+            shape: vec![dim; 2].into(),
+        }
+    }
+
+    pub fn eye(dim: usize) -> Self {
+        let mut eye = vec![T::zero(); dim * dim];
+        (0..dim).for_each(|i| {
+            eye[i * dim + i] = T::one();
+        });
+        Self {
+            data: Arc::new(eye),
+            shape: vec![dim; 2].into(),
+        }
+    }
 
     pub fn randn<R>(shape: &[usize], rng: &mut R) -> Self
     where
         R: Rng,
-        // TODO : what does this bound mean?
         // do i need to include ?Sized for R like this: R: Rng + ?Sized,
+        // TODO : what does this bound mean?
         StandardNormal: Distribution<T>,
     {
         let shape: Shape = shape.into();
@@ -474,6 +509,20 @@ where
 
     pub fn powi(&self, pow: i32) -> Self {
         self.map(|x| x.powi(pow))
+    }
+
+    pub fn linspace(start: T, end: T, steps: usize) -> Self {
+        // Tensor::linspace(3.0, 10.0, 5);
+        // [  3.0,   4.75,   6.5,   8.25,  10.0]
+        let mut linspace = Vec::with_capacity(steps);
+        let dx = (end - start) / (T::from(steps).unwrap() - T::one());
+        (0..steps).for_each(|i| {
+            linspace.push(start + dx * T::from(i).unwrap());
+        });
+        Self {
+            data: Arc::new(linspace),
+            shape: vec![steps; 1].into(),
+        }
     }
 }
 
