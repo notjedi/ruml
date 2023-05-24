@@ -429,6 +429,22 @@ where
         self.broadcasted_zip(&other, |x, y| if x != y { T::one() } else { T::zero() })
     }
 
+    pub fn as_type<S>(&self) -> Tensor<S>
+    where
+        S: Num,
+    {
+        // TODO: write tests
+        let data = self
+            .data
+            .iter()
+            .map(|&x| num_traits::cast(x).unwrap())
+            .collect::<Vec<S>>();
+        Tensor {
+            data: Arc::new(data),
+            shape: self.shape.clone(),
+        }
+    }
+
     pub fn map(&self, f: impl Fn(T) -> T) -> Self {
         let map_data = (*self.data).iter().map(|&x| f(x)).collect::<Vec<T>>();
         Self {
