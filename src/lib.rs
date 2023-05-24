@@ -1,6 +1,7 @@
 mod backend;
 mod ops;
 mod tensor;
+pub mod types;
 
 pub use backend::*;
 pub use ops::*;

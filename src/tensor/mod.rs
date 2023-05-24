@@ -4,29 +4,16 @@ use rand::Rng;
 use rand_distr::{Distribution, StandardNormal};
 
 pub use self::shape::{Shape, TensorIndexIterator};
-use crate::{assert_dim, assert_numel};
+use crate::{
+    assert_dim, assert_numel,
+    types::{Num, NumFloat, NumInt},
+};
 use std::{
     assert_eq,
     fmt::{Debug, Display},
     sync::Arc,
     vec,
 };
-
-// https://stackoverflow.com/questions/40929867/how-do-you-abstract-generics-in-nested-rust-types
-pub trait Num:
-    num_traits::Num + num_traits::cast::NumCast + num_traits::NumAssignOps + PartialOrd + Debug + Copy
-{
-}
-
-impl<T> Num for T where
-    T: num_traits::Num
-        + num_traits::cast::NumCast
-        + num_traits::NumAssignOps
-        + PartialOrd
-        + Debug
-        + Copy
-{
-}
 
 #[derive(Eq, PartialEq)]
 pub struct Tensor<T>
@@ -142,14 +129,6 @@ where
 // TODO: mul
 // TODO: neg
 //
-// tensor funcs
-// TODO: eye
-// TODO: tril
-// TODO: random?
-// TODO: linspace?
-// TODO: ones_like?
-// TODO: zeros_like?
-// TODO: constant_like?
 //
 // TODO: pad?
 // TODO: crop?
@@ -184,6 +163,17 @@ where
         }
     }
 
+    pub fn eye(dim: usize) -> Self {
+        let mut eye = vec![T::zero(); dim * dim];
+        (0..dim).for_each(|i| {
+            eye[i * dim + i] = T::one();
+        });
+        Self {
+            data: Arc::new(eye),
+            shape: vec![dim; 2].into(),
+        }
+    }
+
     pub fn tril(dim: usize) -> Self {
         let mut tril = vec![T::one(); dim * dim];
         (0..dim).for_each(|i| {
@@ -212,17 +202,6 @@ where
         }
     }
 
-    pub fn eye(dim: usize) -> Self {
-        let mut eye = vec![T::zero(); dim * dim];
-        (0..dim).for_each(|i| {
-            eye[i * dim + i] = T::one();
-        });
-        Self {
-            data: Arc::new(eye),
-            shape: vec![dim; 2].into(),
-        }
-    }
-
     pub fn randn<R>(shape: &[usize], rng: &mut R) -> Self
     where
         R: Rng,
@@ -242,8 +221,8 @@ where
     }
 
     // lazy init of tensor with value
-    pub fn constant(value: T, shape: &[usize]) -> Self {
-        let data = vec![value; 1];
+    pub fn full(fill_value: T, shape: &[usize]) -> Self {
+        let data = vec![fill_value; 1];
         let shape = Shape {
             shape: shape.to_vec(),
             strides: vec![0; shape.len()],
@@ -255,12 +234,12 @@ where
         }
     }
 
-    pub fn constant_like(value: T, other: &Self) -> Self {
-        Self::constant(value, &other.shape.shape)
+    pub fn full_like(fill_value: T, other: &Self) -> Self {
+        Self::full(fill_value, &other.shape.shape)
     }
 
     pub fn zeros(shape: &[usize]) -> Self {
-        Self::constant(T::zero(), shape)
+        Self::full(T::zero(), shape)
     }
 
     pub fn zeros_like(other: &Self) -> Self {
@@ -268,7 +247,7 @@ where
     }
 
     pub fn ones(shape: &[usize]) -> Self {
-        Self::constant(T::one(), shape)
+        Self::full(T::one(), shape)
     }
 
     pub fn ones_like(other: &Self) -> Self {
@@ -485,8 +464,12 @@ where
 
 impl<T> Tensor<T>
 where
-    T: num_traits::Float + num_traits::NumAssignOps + std::fmt::Debug,
+    T: NumFloat,
 {
+    pub fn exp(&self) -> Self {
+        self.map(|x| x.exp())
+    }
+
     pub fn log(&self) -> Self {
         self.map(|x| x.ln())
     }
@@ -499,10 +482,6 @@ where
         self.map(|x| x.log10())
     }
 
-    pub fn exp(&self) -> Self {
-        self.map(|x| x.exp())
-    }
-
     pub fn powf(&self, pow: T) -> Self {
         self.map(|x| x.powf(pow))
     }
@@ -512,6 +491,8 @@ where
     }
 
     pub fn linspace(start: T, end: T, steps: usize) -> Self {
+        // NOTE: this fn would panic if steps == 0; this is intentional cause we do not support
+        // empty tensors.
         // Tensor::linspace(3.0, 10.0, 5);
         // [  3.0,   4.75,   6.5,   8.25,  10.0]
         let mut linspace = Vec::with_capacity(steps);
@@ -528,7 +509,7 @@ where
 
 impl<T> Tensor<T>
 where
-    T: num_traits::PrimInt + num_traits::NumAssignOps + std::fmt::Debug,
+    T: NumInt,
 {
     pub fn pow(&self, pow: u32) -> Self {
         self.map(|x| x.pow(pow))
