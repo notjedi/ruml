@@ -12,7 +12,6 @@ pub enum UnaryOps {
     None,
     Square,
     SquareRoot,
-    // Exp, // ?
 }
 
 pub enum BinaryOps {
@@ -35,8 +34,8 @@ pub enum MlOps {
 }
 
 pub enum ShapeOps {
+    Expand,
     Permute,
-    Repeat, // TODO: check if expand is actually repeat
     Reshape,
     Transpose,
     View,

@@ -1,10 +1,18 @@
 use std::{fmt::Debug, ops::Neg};
 
-use num_traits::{Bounded, Float, NumAssignOps, NumCast, PrimInt};
+use num_traits::{Bounded, Float, NumAssignOps, NumCast, PrimInt, Signed};
 
 // https://stackoverflow.com/questions/40929867/how-do-you-abstract-generics-in-nested-rust-types
 pub trait Num:
-    num_traits::Num + NumCast + NumAssignOps + Bounded + PartialOrd + Neg<Output = Self> + Debug + Copy
+    num_traits::Num
+    + NumCast
+    + NumAssignOps
+    + Bounded
+    + PartialOrd
+    + Neg<Output = Self>
+    + Signed
+    + Debug
+    + Copy
 {
 }
 impl<T> Num for T where
@@ -14,6 +22,7 @@ impl<T> Num for T where
         + Bounded
         + PartialOrd
         + Neg<Output = Self>
+        + Signed
         + Debug
         + Copy
 {

@@ -1,13 +1,12 @@
 mod shape;
-
-use rand::Rng;
-use rand_distr::{Distribution, StandardNormal};
-
 pub use self::shape::{Shape, TensorIndexIterator};
+
 use crate::{
     assert_dim, assert_numel,
     types::{Num, NumFloat, NumInt},
 };
+use rand::Rng;
+use rand_distr::{Distribution, StandardNormal};
 use std::{
     assert_eq,
     fmt::{Debug, Display},
@@ -438,6 +437,18 @@ where
         }
     }
 
+    pub fn abs(&self) -> Self {
+        self.map(|x| x.abs())
+    }
+
+    pub fn square(&self) -> Self {
+        self.map(|x| x * x)
+    }
+
+    pub fn relu(&self) -> Self {
+        self.map(|x| if x > T::zero() { x } else { T::zero() })
+    }
+
     pub fn zip(&self, other: &Self, f: impl Fn(T, T) -> T) -> Self {
         assert_eq!(
             self.shape(),
@@ -572,6 +583,14 @@ where
 
     pub fn powi(&self, pow: i32) -> Self {
         self.map(|x| x.powi(pow))
+    }
+
+    pub fn sqrt(&self) -> Self {
+        self.map(|x| x.sqrt())
+    }
+
+    pub fn tanh(&self) -> Self {
+        self.map(|x| x.tan())
     }
 
     pub fn linspace(start: T, end: T, steps: usize) -> Self {
