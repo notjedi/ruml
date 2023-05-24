@@ -115,10 +115,6 @@ where
 //
 // TODO: should i make *_like methods as object methods instead of class methods?
 //
-// reduce funcs
-// TODO: max
-// TODO: min
-//
 // zip funcs (should this be broadcasted_zip?)
 // TODO: element-wise eq
 // TODO: element-wise nq
@@ -327,6 +323,13 @@ where
         self.shape = shape;
     }
 
+    #[allow(non_snake_case)]
+    pub fn T(&self) -> Self {
+        let mut new_shape = self.shape.shape.clone();
+        new_shape.reverse();
+        self.permute(&new_shape)
+    }
+
     pub fn permute(&self, dims: &[usize]) -> Self {
         let shape = self.shape.permute(dims);
         Self {
@@ -377,6 +380,10 @@ where
             iter_dim: dim,
             dim_idx: 0,
         }
+    }
+
+    pub fn eq(&self, other: &Self) -> Self {
+        self.broadcasted_zip(&other, |x, y| if x == y { T::one() } else { T::zero() })
     }
 
     pub fn map(&self, f: impl Fn(T) -> T) -> Self {
@@ -436,24 +443,57 @@ where
         }
     }
 
+    pub fn reduce(&self, default: T, dim: usize, f: impl Fn(T, T) -> T) -> Self {
+        assert_dim!(dim, self.shape.ndim());
+        let (reduced_shape, stride_shape) = self.shape.reduce_dim(dim);
+        let mut reduce_buffer = vec![default; reduced_shape.numel()];
+        self.shape.index_iter().for_each(|index| {
+            let self_idx = self.shape.get_buffer_idx(&index);
+            let stride_idx = stride_shape.get_buffer_idx(&index);
+            reduce_buffer[stride_idx] = f(reduce_buffer[stride_idx], self.data[self_idx]);
+        });
+        Self {
+            data: Arc::new(reduce_buffer),
+            shape: reduced_shape,
+        }
+    }
+
     pub fn sum<S>(&self, dim: S) -> Self
     where
         S: Into<Option<usize>>,
     {
         match dim.into() {
-            Some(dim) => {
-                assert_dim!(dim, self.shape.ndim());
-                let (reduced_shape, stride_shape) = self.shape.reduce_dim(dim);
-                let mut sum_buffer = vec![T::zero(); reduced_shape.numel()];
-                for index in self.shape.index_iter() {
-                    sum_buffer[stride_shape.get_buffer_idx(&index)] +=
-                        self.data[self.shape.get_buffer_idx(&index)];
-                }
-                Self {
-                    data: Arc::new(sum_buffer),
-                    shape: reduced_shape,
-                }
+            // TODO: which one should i  use?
+            // Some(dim) => self.reduce(T::zero(), dim, std::ops::Add::add),
+            Some(dim) => self.reduce(T::zero(), dim, |x, y| x + y),
+            None => {
+                let sum = [self.data.iter().fold(T::zero(), |acc, &x| acc + x)].into();
+                Self::new(sum)
             }
+        }
+    }
+
+    pub fn max<S>(&self, dim: S) -> Self
+    where
+        S: Into<Option<usize>>,
+    {
+        // TODO: write tests
+        match dim.into() {
+            Some(dim) => self.reduce(T::min_value(), dim, |x, y| if x > y { x } else { y }),
+            None => {
+                let sum = [self.data.iter().fold(T::zero(), |acc, &x| acc + x)].into();
+                Self::new(sum)
+            }
+        }
+    }
+
+    pub fn min<S>(&self, dim: S) -> Self
+    where
+        S: Into<Option<usize>>,
+    {
+        // TODO: write tests
+        match dim.into() {
+            Some(dim) => self.reduce(T::max_value(), dim, |x, y| if x < y { x } else { y }),
             None => {
                 let sum = [self.data.iter().fold(T::zero(), |acc, &x| acc + x)].into();
                 Self::new(sum)
