@@ -11,6 +11,7 @@ use crate::{
 use std::{
     assert_eq,
     fmt::{Debug, Display},
+    ops::{Add, Div, Mul, Neg, Sub},
     sync::Arc,
     vec,
 };
@@ -48,61 +49,112 @@ where
     }
 }
 
-impl<T> std::ops::Add<&Tensor<T>> for &Tensor<T>
-where
-    T: Num,
-{
+macro_rules! impl_ops {
+    ($op_trait:ident, $op_fn:ident, $op:tt) => {
+        impl<T> $op_trait<&Tensor<T>> for &Tensor<T>
+        where
+            T: Num,
+        {
+            type Output = Tensor<T>;
+
+            fn $op_fn(self, rhs: &Tensor<T>) -> Self::Output {
+                self.broadcasted_zip(&rhs, |x, y| x $op y)
+            }
+        }
+
+        impl<T> $op_trait<&Tensor<T>> for Tensor<T>
+        where
+            T: Num,
+        {
+            type Output = Tensor<T>;
+
+            fn $op_fn(self, rhs: &Tensor<T>) -> Self::Output {
+                self.broadcasted_zip(&rhs, |x, y| x $op y)
+            }
+        }
+
+        impl<T> $op_trait<Tensor<T>> for &Tensor<T>
+        where
+            T: Num,
+        {
+            type Output = Tensor<T>;
+
+            fn $op_fn(self, rhs: Tensor<T>) -> Self::Output {
+                self.broadcasted_zip(&rhs, |x, y| x $op y)
+            }
+        }
+
+        impl<T> $op_trait<Tensor<T>> for Tensor<T>
+        where
+            T: Num,
+        {
+            type Output = Tensor<T>;
+
+            fn $op_fn(self, rhs: Tensor<T>) -> Self::Output {
+                self.broadcasted_zip(&rhs, |x, y| x $op y)
+            }
+        }
+
+        impl<T> $op_trait<T> for Tensor<T>
+        where
+            T: Num,
+        {
+            type Output = Tensor<T>;
+
+            fn $op_fn(self, rhs: T) -> Self::Output {
+                let mut add_vec = (*self.data).clone();
+                add_vec.iter_mut().for_each(|x| *x = *x $op rhs);
+                Tensor {
+                    data: Arc::new(add_vec),
+                    shape: self.shape.clone(),
+                }
+            }
+        }
+
+        impl<T> $op_trait<T> for &Tensor<T>
+        where
+            T: Num,
+        {
+            type Output = Tensor<T>;
+
+            fn $op_fn(self, rhs: T) -> Self::Output {
+                let mut add_vec = (*self.data).clone();
+                add_vec.iter_mut().for_each(|x| *x = *x $op rhs);
+                Tensor {
+                    data: Arc::new(add_vec),
+                    shape: self.shape.clone(),
+                }
+            }
+        }
+    };
+}
+
+impl_ops!(Add, add, +);
+impl_ops!(Sub, sub, -);
+impl_ops!(Mul, mul, *);
+impl_ops!(Div, div, /);
+
+impl<T: Num> Neg for Tensor<T> {
     type Output = Tensor<T>;
 
-    fn add(self, rhs: &Tensor<T>) -> Self::Output {
-        self.broadcasted_zip(&rhs, |x, y| x + y)
+    fn neg(self) -> Tensor<T> {
+        let mut neg_vec = (*self.data).clone();
+        neg_vec.iter_mut().for_each(|x| *x = -(*x));
+        Tensor {
+            data: Arc::new(neg_vec),
+            shape: self.shape.clone(),
+        }
     }
 }
 
-impl<T> std::ops::Add<&Tensor<T>> for Tensor<T>
-where
-    T: Num,
-{
+impl<T: Num> Neg for &Tensor<T> {
     type Output = Tensor<T>;
 
-    fn add(self, rhs: &Tensor<T>) -> Self::Output {
-        self.broadcasted_zip(&rhs, |x, y| x + y)
-    }
-}
-
-impl<T> std::ops::Add<Tensor<T>> for &Tensor<T>
-where
-    T: Num,
-{
-    type Output = Tensor<T>;
-
-    fn add(self, rhs: Tensor<T>) -> Self::Output {
-        self.broadcasted_zip(&rhs, |x, y| x + y)
-    }
-}
-
-impl<T> std::ops::Add<Tensor<T>> for Tensor<T>
-where
-    T: Num,
-{
-    type Output = Tensor<T>;
-
-    fn add(self, rhs: Tensor<T>) -> Self::Output {
-        self.broadcasted_zip(&rhs, |x, y| x + y)
-    }
-}
-
-impl<T> std::ops::Add<T> for Tensor<T>
-where
-    T: Num,
-{
-    type Output = Tensor<T>;
-
-    fn add(self, rhs: T) -> Self::Output {
-        let mut add_vec = (*self.data).clone();
-        add_vec.iter_mut().for_each(|x| *x += rhs);
-        Self {
-            data: Arc::new(add_vec),
+    fn neg(self) -> Tensor<T> {
+        let mut neg_vec = (*self.data).clone();
+        neg_vec.iter_mut().for_each(|x| *x = -(*x));
+        Tensor {
+            data: Arc::new(neg_vec),
             shape: self.shape.clone(),
         }
     }
@@ -112,18 +164,6 @@ where
 // TODO: impl<T: Num> std::ops::Add<Tensor<T>> for &mut Tensor<T> {
 // TODO: impl<T: Num> std::ops::Add<T> for &mut Tensor<T>
 // TODO: get around to implement mut iter for tensor
-//
-// TODO: should i make *_like methods as object methods instead of class methods?
-//
-// zip funcs (should this be broadcasted_zip?)
-// TODO: element-wise eq
-// TODO: element-wise nq
-//
-// binary ops
-// TODO: sub
-// TODO: div
-// TODO: mul
-// TODO: neg
 //
 //
 // TODO: pad?
@@ -384,6 +424,10 @@ where
 
     pub fn eq(&self, other: &Self) -> Self {
         self.broadcasted_zip(&other, |x, y| if x == y { T::one() } else { T::zero() })
+    }
+
+    pub fn nq(&self, other: &Self) -> Self {
+        self.broadcasted_zip(&other, |x, y| if x != y { T::one() } else { T::zero() })
     }
 
     pub fn map(&self, f: impl Fn(T) -> T) -> Self {
