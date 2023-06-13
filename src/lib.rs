@@ -1,3 +1,6 @@
+#![feature(portable_simd)]
+#![feature(slice_as_chunks)]
+
 mod backend;
 mod ops;
 mod tensor;
