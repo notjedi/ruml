@@ -15,3 +15,4 @@ keywords = ["tensor", "tensor-library", "machine-learning"]
 rand = "0.8"
 num-traits = "0.2"
 rand_distr = "0.4"
+aligned-vec = "0.5"

@@ -5,6 +5,7 @@ use crate::{
     assert_dim, assert_numel,
     types::{Num, NumFloat, NumInt},
 };
+use aligned_vec::{avec, AVec, CACHELINE_ALIGN};
 use rand::Rng;
 use rand_distr::{Distribution, StandardNormal};
 use std::{
@@ -20,8 +21,8 @@ pub struct Tensor<T>
 where
     T: Num,
 {
-    data: Arc<Vec<T>>,
-    shape: Shape,
+    pub(crate) data: Arc<AVec<T>>,
+    pub(crate) shape: Shape,
 }
 
 impl<T> Display for Tensor<T>
@@ -128,6 +129,8 @@ macro_rules! impl_ops {
     };
 }
 
+// https://stackoverflow.com/questions/73464666/how-to-implement-stdops-traits-for-multiple-rhs
+// https://stackoverflow.com/questions/24594374/how-can-an-operator-be-overloaded-for-different-rhs-types-and-return-values
 impl_ops!(Add, add, +);
 impl_ops!(Sub, sub, -);
 impl_ops!(Mul, mul, *);
@@ -163,12 +166,6 @@ impl<T: Num> Neg for &Tensor<T> {
 // TODO: impl<T: Num> std::ops::Add<Tensor<T>> for &mut Tensor<T> {
 // TODO: impl<T: Num> std::ops::Add<T> for &mut Tensor<T>
 // TODO: get around to implement mut iter for tensor
-//
-//
-// TODO: pad?
-// TODO: crop?
-// TODO: to_tensor_mut?
-// TODO: fused_zip_reduce?
 
 // we only support channel last memory format see
 // https://pytorch.org/blog/tensor-memory-format-matters for details
@@ -178,7 +175,7 @@ impl<T> Tensor<T>
 where
     T: Num,
 {
-    pub fn new(data: Vec<T>) -> Self {
+    pub fn new(data: AVec<T>) -> Self {
         let shape = Shape {
             shape: [data.len()].into(),
             strides: [1].into(),
@@ -191,7 +188,7 @@ where
     }
 
     pub fn arange(len: usize) -> Self {
-        let data = (0..len).map(|i| T::from(i).unwrap()).collect::<Vec<_>>();
+        let data = AVec::from_iter(CACHELINE_ALIGN, (0..len).map(|i| T::from(i).unwrap()));
         Self {
             data: Arc::new(data),
             shape: Shape::from_len(len),
@@ -199,7 +196,7 @@ where
     }
 
     pub fn eye(dim: usize) -> Self {
-        let mut eye = vec![T::zero(); dim * dim];
+        let mut eye = avec![T::zero(); dim * dim];
         (0..dim).for_each(|i| {
             eye[i * dim + i] = T::one();
         });
@@ -210,7 +207,7 @@ where
     }
 
     pub fn tril(dim: usize) -> Self {
-        let mut tril = vec![T::one(); dim * dim];
+        let mut tril = avec![T::one(); dim * dim];
         (0..dim).for_each(|i| {
             (0..i).for_each(|j| {
                 let idx = j * dim + i;
@@ -224,7 +221,7 @@ where
     }
 
     pub fn triu(dim: usize) -> Self {
-        let mut triu = vec![T::one(); dim * dim];
+        let mut triu = avec![T::one(); dim * dim];
         (0..dim).for_each(|i| {
             (0..i).for_each(|j| {
                 let idx = i * dim + j;
@@ -245,7 +242,7 @@ where
         StandardNormal: Distribution<T>,
     {
         let shape: Shape = shape.into();
-        let mut data: Vec<T> = Vec::with_capacity(shape.numel());
+        let mut data: AVec<T> = AVec::with_capacity(CACHELINE_ALIGN, shape.numel());
         for _ in 0..shape.numel() {
             data.push(rng.sample(StandardNormal));
         }
@@ -257,7 +254,7 @@ where
 
     // lazy init of tensor with value
     pub fn full(fill_value: T, shape: &[usize]) -> Self {
-        let data = vec![fill_value; 1];
+        let data = avec![fill_value; 1];
         let shape = Shape {
             shape: shape.to_vec(),
             strides: vec![0; shape.len()],
@@ -318,8 +315,8 @@ where
     }
 
     #[inline]
-    pub fn ravel(&self) -> Vec<T> {
-        self.into_iter().collect::<Vec<T>>()
+    pub fn ravel(&self) -> AVec<T> {
+        AVec::from_iter(CACHELINE_ALIGN, self.into_iter())
     }
 
     #[inline]
@@ -355,6 +352,29 @@ where
     pub fn strides(&self) -> &[usize] {
         self.shape.strides()
     }
+
+    #[inline]
+    pub fn numel(&self) -> usize {
+        self.shape.numel()
+    }
+
+    #[inline]
+    pub fn is_contiguous(&self) -> bool {
+        self.shape.is_contiguous()
+    }
+
+    // #[inline]
+    // pub fn row(&self, idx: usize) -> &[T] {
+    //     // NOTE, BUG: TODO: Only works for contiguous tensors
+    //     let total_rows = self.shape.shape[0..self.shape.ndim() - 1].iter().product();
+    //     assert!(
+    //         idx < total_rows,
+    //         "row idx should be less then {}",
+    //         total_rows
+    //     );
+    //     let row_size = self.shape.shape[self.shape.ndim() - 1];
+    //     &self.data[self.shape.offset + idx * row_size..(idx + 1) * row_size + self.shape.offset]
+    // }
 
     pub fn view(&mut self, shape: &[usize]) {
         let shape: Shape = shape.into();
@@ -434,11 +454,10 @@ where
         S: Num,
     {
         // TODO: write tests
-        let data = self
-            .data
-            .iter()
-            .map(|&x| num_traits::cast(x).unwrap())
-            .collect::<Vec<S>>();
+        let data = AVec::from_iter(
+            CACHELINE_ALIGN,
+            self.data.iter().map(|&x| num_traits::cast(x).unwrap()),
+        );
         Tensor {
             data: Arc::new(data),
             shape: self.shape.clone(),
@@ -446,7 +465,7 @@ where
     }
 
     pub fn map(&self, f: impl Fn(T) -> T) -> Self {
-        let map_data = (*self.data).iter().map(|&x| f(x)).collect::<Vec<T>>();
+        let map_data = AVec::from_iter(CACHELINE_ALIGN, (*self.data).iter().map(|&x| f(x)));
         Self {
             data: Arc::new(map_data),
             shape: self.shape.clone(),
@@ -473,11 +492,12 @@ where
             self.shape(),
             other.shape()
         );
-        let data = self
-            .into_iter()
-            .zip(other.into_iter())
-            .map(|(x, y)| f(x, y))
-            .collect();
+        let data = AVec::from_iter(
+            CACHELINE_ALIGN,
+            self.into_iter()
+                .zip(other.into_iter())
+                .map(|(x, y)| f(x, y)),
+        );
         Self {
             data: Arc::new(data),
             shape: Shape::new(&self.shape.shape),
@@ -517,7 +537,7 @@ where
     pub fn reduce(&self, default: T, dim: usize, f: impl Fn(T, T) -> T) -> Self {
         assert_dim!(dim, self.shape.ndim());
         let (reduced_shape, stride_shape) = self.shape.reduce_dim(dim);
-        let mut reduce_buffer = vec![default; reduced_shape.numel()];
+        let mut reduce_buffer = avec![default; reduced_shape.numel()];
         self.shape.index_iter().for_each(|index| {
             let self_idx = self.shape.get_buffer_idx(&index);
             let stride_idx = stride_shape.get_buffer_idx(&index);
@@ -538,7 +558,8 @@ where
             // Some(dim) => self.reduce(T::zero(), dim, std::ops::Add::add),
             Some(dim) => self.reduce(T::zero(), dim, |x, y| x + y),
             None => {
-                let sum = [self.data.iter().fold(T::zero(), |acc, &x| acc + x)].into();
+                // BUG: wont' work for non-contiguous tensors
+                let sum = avec![self.data.iter().fold(T::zero(), |acc, &x| acc + x)];
                 Self::new(sum)
             }
         }
@@ -552,7 +573,7 @@ where
         match dim.into() {
             Some(dim) => self.reduce(T::min_value(), dim, |x, y| if x > y { x } else { y }),
             None => {
-                let sum = [self.data.iter().fold(T::zero(), |acc, &x| acc + x)].into();
+                let sum = avec![self.data.iter().fold(T::zero(), |acc, &x| acc + x)];
                 Self::new(sum)
             }
         }
@@ -566,7 +587,7 @@ where
         match dim.into() {
             Some(dim) => self.reduce(T::max_value(), dim, |x, y| if x < y { x } else { y }),
             None => {
-                let sum = [self.data.iter().fold(T::zero(), |acc, &x| acc + x)].into();
+                let sum = avec![self.data.iter().fold(T::zero(), |acc, &x| acc + x)];
                 Self::new(sum)
             }
         }
@@ -614,7 +635,7 @@ where
         // empty tensors.
         // Tensor::linspace(3.0, 10.0, 5);
         // [  3.0,   4.75,   6.5,   8.25,  10.0]
-        let mut linspace = Vec::with_capacity(steps);
+        let mut linspace = AVec::with_capacity(CACHELINE_ALIGN, steps);
         let dx = (end - start) / (T::from(steps).unwrap() - T::one());
         (0..steps).for_each(|i| {
             linspace.push(start + dx * T::from(i).unwrap());
@@ -665,6 +686,7 @@ where
 {
     type Item = T;
 
+    // TODO: write size_hint and count functions
     fn next(&mut self) -> Option<Self::Item> {
         self.index_iter
             .next()
@@ -688,6 +710,7 @@ where
 {
     type Item = Tensor<T>;
 
+    // TODO: write size_hint and count functions
     fn next(&mut self) -> Option<Self::Item> {
         if self.dim_idx >= self.tensor.shape()[self.iter_dim] {
             return None;
@@ -718,7 +741,7 @@ mod tests {
         assert_eq!(ones_tensor.shape(), shape.shape());
         assert_eq!(
             ones_tensor.ravel(),
-            [1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0],
+            avec![1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0],
             "elements don't match for the Tensor::ones tensor"
         );
 
@@ -726,7 +749,7 @@ mod tests {
         assert_eq!(zeros_tensor.shape(), shape.shape());
         assert_eq!(
             zeros_tensor.ravel(),
-            [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
+            avec![0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
             "elements don't match for the Tensor::zeros tensor"
         );
 
@@ -735,10 +758,19 @@ mod tests {
         assert_eq!(arange_tensor.shape(), shape.shape());
         assert_eq!(
             arange_tensor.ravel(),
-            [0.0, 1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0],
+            avec![0.0, 1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0],
             "elements don't match for the Tensor::arange tensor"
         );
     }
+
+    // #[test]
+    // fn test_tensor_row() {
+    //     let shape_vec = vec![3, 4, 5];
+    //     let shape: Shape = shape_vec.clone().into();
+    //     let arange_tensor: Tensor<f32> = Tensor::arange(shape.numel()).reshape(&shape_vec);
+    //     assert_eq!(arange_tensor.row(0), &[0.0, 1.0, 2.0, 3.0, 4.0]);
+    //     assert_eq!(arange_tensor.row(11), &[55.0, 56.0, 57.0, 58.0, 59.0]);
+    // }
 
     #[test]
     fn test_tensor_iter() {
@@ -797,7 +829,7 @@ mod tests {
         let add_tensor = Tensor::arange(add_shape.numel()).reshape(&add_shape.shape) + 5.0;
         assert_eq!(
             add_tensor.ravel(),
-            [5.0, 6.0, 7.0, 8.0, 9.0, 10.0, 11.0, 12.0],
+            avec![5.0, 6.0, 7.0, 8.0, 9.0, 10.0, 11.0, 12.0],
             "elements don't match for the Tensor::arange tensor"
         );
     }
@@ -805,7 +837,6 @@ mod tests {
     // #[test]
     // fn test_tensor_shape_ops() {
     //     let shape: Shape = vec![2, 1, 3].into();
-
     //     let tensor: Tensor<f32> = Tensor::arange(shape.numel())
     //         .reshape(&shape.shape)
     //         .expand(1, 4);
@@ -822,16 +853,36 @@ mod tests {
 
         let sum_tensor = tensor.sum(None);
         let sum = (shape.numel() * (shape.numel() - 1) / 2) as f32;
-        let sum_tensor_check: Tensor<f32> = Tensor::new([sum].into());
+        let sum_tensor_check: Tensor<f32> = Tensor::new(avec![sum]);
         assert_eq!(sum_tensor, sum_tensor_check);
 
         let sum_tensor = tensor.sum(2);
         // import numpy as np; shape = [3, 4, 5]; np.arange(np.prod(shape), dtype=np.float32).reshape(shape).sum(axis=2).flatten()
-        let sum_vec: Vec<f32> = vec![
-            10.0, 35.0, 60.0, 85.0, 110.0, 135.0, 160.0, 185.0, 210.0, 235.0, 260.0, 285.0,
-        ];
+        let sum_vec: AVec<f32> =
+            avec![10.0, 35.0, 60.0, 85.0, 110.0, 135.0, 160.0, 185.0, 210.0, 235.0, 260.0, 285.0];
         assert_eq!(sum_tensor.shape(), &[3, 4, 1]);
         assert_eq!(Arc::try_unwrap(sum_tensor.data).unwrap(), sum_vec);
+
+        dbg!(std::mem::size_of::<Shape>());
+        dbg!(std::mem::align_of::<Shape>());
+        println!("\n");
+        dbg!(std::mem::align_of_val(&shape.shape));
+        dbg!(std::mem::align_of_val(&shape.offset));
+        dbg!(std::mem::align_of_val(&shape.strides));
+        println!("\n");
+        dbg!(std::mem::size_of_val(&shape.shape));
+        dbg!(std::mem::size_of_val(&shape.offset));
+        dbg!(std::mem::size_of_val(&shape.strides));
+        println!("\n");
+        dbg!(std::mem::size_of::<Tensor<f32>>());
+        dbg!(std::mem::align_of::<Tensor<f32>>());
+        println!("\n");
+        dbg!(std::mem::align_of_val(&tensor.data));
+        dbg!(std::mem::align_of_val(&tensor.shape));
+        println!("\n");
+        dbg!(std::mem::size_of_val(&tensor.data));
+        dbg!(std::mem::size_of_val(&tensor.shape));
+        // assert!(false);
     }
 
     #[test]
@@ -840,17 +891,17 @@ mod tests {
         let y = Tensor::<f32>::ones(&[3, 1]);
         let broadcast_tensor = x + y;
         assert_eq!(broadcast_tensor.shape(), &[3, 3]);
-        assert_eq!(broadcast_tensor.ravel(), vec![1.0; 9]);
+        assert_eq!(broadcast_tensor.ravel(), avec![1.0; 9]);
 
         let x = Tensor::<f32>::zeros(&[5, 3, 1]);
         let y = Tensor::<f32>::ones(&[3, 1]);
         let broadcast_tensor = &x + &y;
         assert_eq!(broadcast_tensor.shape(), &[5, 3, 1]);
-        assert_eq!(broadcast_tensor.ravel(), vec![1.0; 15]);
+        assert_eq!(broadcast_tensor.ravel(), avec![1.0; 15]);
 
         let broadcast_tensor = &y + &x;
         assert_eq!(broadcast_tensor.shape(), &[5, 3, 1]);
-        assert_eq!(broadcast_tensor.ravel(), vec![1.0; 15]);
+        assert_eq!(broadcast_tensor.ravel(), avec![1.0; 15]);
     }
 
     #[test]
@@ -860,7 +911,7 @@ mod tests {
         assert_eq!(tensor.shape(), &[3, 2]);
         assert_eq!(
             tensor.ravel(),
-            [0.712813, 0.85833144, -2.4362438, 0.16334426, -1.2750102, 1.287171]
+            avec![0.712813, 0.85833144, -2.4362438, 0.16334426, -1.2750102, 1.287171]
         );
     }
 }
