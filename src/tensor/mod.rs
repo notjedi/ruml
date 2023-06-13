@@ -795,7 +795,6 @@ mod tests {
 
         // should return the following elements [0, 1, 2, 3, 4, 5]
         for dim_tensor in arange_tensor.dim_iter(0) {
-            // dbg!(dim_tensor.into_iter().collect::<Vec<_>>().as_slice());
             assert_eq!(
                 dim_tensor.into_iter().collect::<Vec<_>>().as_slice(),
                 vec![0.0, 1.0, 2.0, 3.0, 4.0, 5.0]
@@ -805,7 +804,6 @@ mod tests {
         // should return the following elements [[0, 1, 2], [3, 4, 5]]
         let mut num = 0.0;
         for dim_tensor in arange_tensor.dim_iter(1) {
-            // dbg!(dim_tensor.into_iter().collect::<Vec<_>>().as_slice());
             assert_eq!(
                 dim_tensor.into_iter().collect::<Vec<_>>().as_slice(),
                 vec![num, num + 1.0, num + 2.0]
@@ -815,7 +813,6 @@ mod tests {
 
         // should return the following elements [[0, 3], [1, 4], [2, 5]]
         for (i, dim_tensor) in arange_tensor.dim_iter(2).enumerate() {
-            // dbg!(dim_tensor.into_iter().collect::<Vec<_>>().as_slice());
             assert_eq!(
                 dim_tensor.into_iter().collect::<Vec<_>>().as_slice(),
                 vec![i as f32, i as f32 + 3.0]
@@ -862,27 +859,6 @@ mod tests {
             avec![10.0, 35.0, 60.0, 85.0, 110.0, 135.0, 160.0, 185.0, 210.0, 235.0, 260.0, 285.0];
         assert_eq!(sum_tensor.shape(), &[3, 4, 1]);
         assert_eq!(Arc::try_unwrap(sum_tensor.data).unwrap(), sum_vec);
-
-        dbg!(std::mem::size_of::<Shape>());
-        dbg!(std::mem::align_of::<Shape>());
-        println!("\n");
-        dbg!(std::mem::align_of_val(&shape.shape));
-        dbg!(std::mem::align_of_val(&shape.offset));
-        dbg!(std::mem::align_of_val(&shape.strides));
-        println!("\n");
-        dbg!(std::mem::size_of_val(&shape.shape));
-        dbg!(std::mem::size_of_val(&shape.offset));
-        dbg!(std::mem::size_of_val(&shape.strides));
-        println!("\n");
-        dbg!(std::mem::size_of::<Tensor<f32>>());
-        dbg!(std::mem::align_of::<Tensor<f32>>());
-        println!("\n");
-        dbg!(std::mem::align_of_val(&tensor.data));
-        dbg!(std::mem::align_of_val(&tensor.shape));
-        println!("\n");
-        dbg!(std::mem::size_of_val(&tensor.data));
-        dbg!(std::mem::size_of_val(&tensor.shape));
-        // assert!(false);
     }
 
     #[test]
