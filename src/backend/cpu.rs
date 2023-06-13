@@ -1,7 +1,7 @@
 use aligned_vec::{avec, AVec, CACHELINE_ALIGN};
 
 use super::Backend;
-use crate::Tensor;
+use crate::{assert_prefix_len, Tensor};
 use core::simd::f32x8;
 
 pub struct CpuBackend {}
@@ -56,19 +56,13 @@ impl Backend<f32> for CpuBackend {
             0 => {
                 let mut data = avec![0.0 as f32; new_shape.numel()];
                 let (d_prefix, d_aligned, d_suffix) = data.as_simd_mut::<8>();
-                assert!(
-                    d_prefix.len() == 0,
-                    "bro, something is wrong w your code, check alignment of data"
-                );
+                assert_prefix_len!(d_prefix);
 
                 (0..total_rows).for_each(|idx| {
                     // let row = &tensor.data[idx * row_stride..(idx+1) * row_stride];
                     let row = &tensor.data[idx * stride..idx * stride + stride];
                     let (prefix, aligned, suffix) = row.as_simd::<8>();
-                    assert!(
-                        prefix.len() == 0,
-                        "bro, something is wrong w your code, check alignment of data"
-                    );
+                    assert_prefix_len!(prefix);
 
                     aligned
                         .iter()
@@ -92,17 +86,11 @@ impl Backend<f32> for CpuBackend {
 
                     {
                         let (d_prefix, d_aligned, d_suffix) = acc.as_simd_mut::<8>();
-                        assert!(
-                            d_prefix.len() == 0,
-                            "bro, something is wrong w your code, check alignment of data"
-                        );
+                        assert_prefix_len!(d_prefix);
 
                         row.chunks(row_stride).for_each(|chunk| {
                             let (prefix, aligned, suffix) = chunk.as_simd::<8>();
-                            assert!(
-                                prefix.len() == 0,
-                                "bro, something is wrong w your code, check alignment of data"
-                            );
+                            assert_prefix_len!(prefix);
                             aligned
                                 .iter()
                                 .zip(d_aligned.iter_mut())
@@ -128,10 +116,7 @@ impl Backend<f32> for CpuBackend {
                     let row = &tensor.data[idx * stride..idx * stride + stride];
                     row.chunks(row_stride).for_each(|chunk| {
                         let (prefix, aligned, suffix) = chunk.as_simd::<8>();
-                        assert!(
-                            prefix.len() == 0,
-                            "bro, something is wrong w your code, check alignment of data"
-                        );
+                        assert_prefix_len!(prefix);
                         let acc = f32x8::splat(0.0 as f32);
                         let sum = aligned.iter().fold(acc, f32x8::add);
                         data.push(sum.reduce_sum() + suffix.iter().sum::<f32>());

@@ -49,5 +49,15 @@ macro_rules! assert_numel {
     };
 }
 
+macro_rules! assert_prefix_len {
+    ($prefix:ident) => {
+        assert!(
+            $prefix.len() == 0,
+            "bro, something is wrong w your code, check alignment of data"
+        );
+    };
+}
+
 pub(crate) use assert_dim;
 pub(crate) use assert_numel;
+pub(crate) use assert_prefix_len;
