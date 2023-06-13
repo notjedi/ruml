@@ -3,6 +3,7 @@ use std::{fmt::Debug, ops::Neg};
 use num_traits::{Bounded, Float, NumAssignOps, NumCast, PrimInt, Signed};
 
 // https://stackoverflow.com/questions/40929867/how-do-you-abstract-generics-in-nested-rust-types
+// https://stackoverflow.com/questions/61167383/type-aliasing-for-multiple-traits-with-generic-types
 pub trait Num:
     num_traits::Num
     + NumCast

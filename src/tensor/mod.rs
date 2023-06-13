@@ -270,21 +270,54 @@ where
         Self::full(fill_value, &other.shape.shape)
     }
 
+    pub fn ones(shape: &[usize]) -> Self {
+        Self::full(T::one(), shape)
+    }
+
     pub fn zeros(shape: &[usize]) -> Self {
         Self::full(T::zero(), shape)
+    }
+
+    pub fn ones_like(other: &Self) -> Self {
+        Self::ones(&other.shape.shape)
     }
 
     pub fn zeros_like(other: &Self) -> Self {
         Self::zeros(&other.shape.shape)
     }
 
-    pub fn ones(shape: &[usize]) -> Self {
-        Self::full(T::one(), shape)
+    #[inline]
+    pub fn numel(&self) -> usize {
+        self.shape.numel()
     }
 
-    pub fn ones_like(other: &Self) -> Self {
-        Self::ones(&other.shape.shape)
+    #[inline]
+    pub fn shape(&self) -> &[usize] {
+        self.shape.shape()
     }
+
+    #[inline]
+    pub fn strides(&self) -> &[usize] {
+        self.shape.strides()
+    }
+
+    #[inline]
+    pub fn is_contiguous(&self) -> bool {
+        self.shape.is_contiguous()
+    }
+
+    // #[inline]
+    // pub fn row(&self, idx: usize) -> &[T] {
+    //     // NOTE, BUG: TODO: Only works for contiguous tensors
+    //     let total_rows = self.shape.shape[0..self.shape.ndim() - 1].iter().product();
+    //     assert!(
+    //         idx < total_rows,
+    //         "row idx should be less then {}",
+    //         total_rows
+    //     );
+    //     let row_size = self.shape.shape[self.shape.ndim() - 1];
+    //     &self.data[self.shape.offset + idx * row_size..(idx + 1) * row_size + self.shape.offset]
+    // }
 
     #[inline]
     pub fn flatten(&self) -> Self {
@@ -295,6 +328,11 @@ where
             return self.reshape(&[self.shape.numel()]);
         }
         self.contiguous().reshape(&[self.shape.numel()])
+    }
+
+    #[inline]
+    pub fn ravel(&self) -> AVec<T> {
+        AVec::from_iter(CACHELINE_ALIGN, self.into_iter())
     }
 
     #[inline]
@@ -312,11 +350,6 @@ where
             data: Arc::clone(&self.data),
             shape: self.shape.clone(),
         }
-    }
-
-    #[inline]
-    pub fn ravel(&self) -> AVec<T> {
-        AVec::from_iter(CACHELINE_ALIGN, self.into_iter())
     }
 
     #[inline]
@@ -342,39 +375,6 @@ where
             shape: Shape::new(&self.shape.shape),
         }
     }
-
-    #[inline]
-    pub fn shape(&self) -> &[usize] {
-        self.shape.shape()
-    }
-
-    #[inline]
-    pub fn strides(&self) -> &[usize] {
-        self.shape.strides()
-    }
-
-    #[inline]
-    pub fn numel(&self) -> usize {
-        self.shape.numel()
-    }
-
-    #[inline]
-    pub fn is_contiguous(&self) -> bool {
-        self.shape.is_contiguous()
-    }
-
-    // #[inline]
-    // pub fn row(&self, idx: usize) -> &[T] {
-    //     // NOTE, BUG: TODO: Only works for contiguous tensors
-    //     let total_rows = self.shape.shape[0..self.shape.ndim() - 1].iter().product();
-    //     assert!(
-    //         idx < total_rows,
-    //         "row idx should be less then {}",
-    //         total_rows
-    //     );
-    //     let row_size = self.shape.shape[self.shape.ndim() - 1];
-    //     &self.data[self.shape.offset + idx * row_size..(idx + 1) * row_size + self.shape.offset]
-    // }
 
     pub fn view(&mut self, shape: &[usize]) {
         let shape: Shape = shape.into();

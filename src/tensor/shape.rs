@@ -13,7 +13,6 @@ pub struct Shape {
 impl Shape {
     #[inline]
     pub fn new(shape: &[usize]) -> Self {
-        // TODO: accept &[usize] as arg
         // Compute default array strides
         // Shape (a, b, c) => Give strides (b * c, c, 1)
         // Right now, we only support row major stride by default
