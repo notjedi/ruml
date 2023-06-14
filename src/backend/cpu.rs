@@ -12,6 +12,38 @@ impl Backend<f32> for AVX2Backend {
         todo!()
     }
 
+    fn relu(tensor: &Tensor<f32>) -> Tensor<f32> {
+        debug_assert!(
+            tensor.is_contiguous(),
+            "vector instructions are only supported for contiguous tensors"
+        );
+        let mut data = AVec::<f32>::with_capacity(CACHELINE_ALIGN, tensor.data.len());
+        let (prefix, aligned, suffix) = tensor.data.as_simd::<8>();
+        let zeros = f32x8::splat(0.0);
+        assert_prefix_len!(prefix);
+
+        aligned.iter().for_each(|&vec| {
+            let mask = vec.is_sign_positive();
+            let masked_elems = mask.select(vec, zeros);
+            masked_elems
+                .as_array()
+                .iter()
+                .for_each(|&elem| data.push(elem));
+        });
+        suffix.iter().for_each(|&x| {
+            if x < 0.0 {
+                data.push(0.0)
+            } else {
+                data.push(x)
+            }
+        });
+
+        Tensor {
+            data: Arc::new(data),
+            shape: tensor.shape.clone(),
+        }
+    }
+
     fn sum(tensor: &Tensor<f32>) -> f32 {
         debug_assert!(
             tensor.is_contiguous(),
@@ -22,6 +54,26 @@ impl Backend<f32> for AVX2Backend {
         let acc = f32x8::splat(0.0);
         let acc = aligned.iter().fold(acc, f32x8::add);
         acc.reduce_sum() + suffix.iter().sum::<f32>()
+    }
+
+    fn add_scalar(a: &Tensor<f32>, b: f32) -> Tensor<f32> {
+        let b_vec = f32x8::splat(b);
+        let mut data = AVec::<f32>::with_capacity(CACHELINE_ALIGN, a.data.len());
+        let (a_prefix, a_aligned, a_suffix) = a.data.as_simd::<8>();
+        assert_prefix_len!(a_prefix);
+
+        a_aligned.iter().for_each(|a_vec| {
+            let add_vec = a_vec + b_vec;
+            add_vec.as_array().iter().for_each(|&elem| data.push(elem));
+        });
+        a_suffix.iter().for_each(|a_elem| {
+            data.push(a_elem + b);
+        });
+
+        Tensor {
+            data: Arc::new(data),
+            shape: a.shape.clone(),
+        }
     }
 
     fn add_elementwise(a: &Tensor<f32>, b: &Tensor<f32>) -> Tensor<f32> {
@@ -54,26 +106,6 @@ impl Backend<f32> for AVX2Backend {
             shape: a.shape.clone(),
         }
     }
-
-    fn add_scalar(a: &Tensor<f32>, b: f32) -> Tensor<f32> {
-        let b_vec = f32x8::splat(b);
-        let mut data = AVec::<f32>::with_capacity(CACHELINE_ALIGN, a.data.len());
-        let (a_prefix, a_aligned, a_suffix) = a.data.as_simd::<8>();
-        assert_prefix_len!(a_prefix);
-
-        a_aligned.iter().for_each(|a_vec| {
-            let add_vec = a_vec + b_vec;
-            add_vec.as_array().iter().for_each(|&elem| data.push(elem));
-        });
-        a_suffix.iter().for_each(|a_elem| {
-            data.push(a_elem + b);
-        });
-
-        Tensor {
-            data: Arc::new(data),
-            shape: a.shape.clone(),
-        }
-    }
 }
 
 #[cfg(test)]
@@ -85,6 +117,11 @@ mod tests {
     #[ignore = "unimplemented"]
     fn test_matmul() {
         backend_tests::<AVX2Backend, f32>::test_matmul();
+    }
+
+    #[test]
+    fn test_relu() {
+        backend_tests::<AVX2Backend, f32>::test_relu();
     }
 
     #[test]

@@ -9,9 +9,10 @@ where
     T: NumFloat,
 {
     fn matmul();
+    fn relu(tensor: &Tensor<T>) -> Tensor<T>;
     fn sum(tensor: &Tensor<T>) -> T;
-    fn add_elementwise(a: &Tensor<T>, b: &Tensor<T>) -> Tensor<T>;
     fn add_scalar(a: &Tensor<T>, b: T) -> Tensor<T>;
+    fn add_elementwise(a: &Tensor<T>, b: &Tensor<T>) -> Tensor<T>;
 }
 
 // https://users.rust-lang.org/t/unit-tests-for-traits/86848
@@ -39,6 +40,21 @@ pub mod tests {
         pub fn test_matmul() {
             let out = T::matmul();
             assert_eq!(out, ());
+        }
+
+        pub fn test_relu() {
+            let vals_iter = (-5..5).map(|x| U::from(x).unwrap());
+            let a = Tensor::new(AVec::from_iter(CACHELINE_ALIGN, vals_iter));
+            let out = T::relu(&a);
+            assert_eq!(
+                out.ravel(),
+                AVec::from_iter(
+                    CACHELINE_ALIGN,
+                    [0, 0, 0, 0, 0, 0, 1, 2, 3, 4]
+                        .into_iter()
+                        .map(|x| U::from(x).unwrap())
+                )
+            );
         }
 
         pub fn test_sum() {
