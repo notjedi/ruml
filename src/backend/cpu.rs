@@ -5,7 +5,7 @@ use crate::{assert_prefix_len, Tensor};
 use core::simd::{f32x8, SimdFloat};
 use std::{ops::Add, sync::Arc};
 
-pub struct AVX2Backend {}
+pub struct AVX2Backend;
 
 impl Backend<f32> for AVX2Backend {
     fn matmul() {
@@ -79,26 +79,26 @@ impl Backend<f32> for AVX2Backend {
 #[cfg(test)]
 mod tests {
     use super::AVX2Backend;
-    use crate::backend::tests as backend_tests;
+    use crate::backend::tests::Tests as backend_tests;
 
     #[test]
     #[ignore = "unimplemented"]
     fn test_matmul() {
-        backend_tests::test_matmul::<AVX2Backend, f32>();
+        backend_tests::<AVX2Backend, f32>::test_matmul();
     }
 
     #[test]
     fn test_sum() {
-        backend_tests::test_sum::<AVX2Backend, f32>();
+        backend_tests::<AVX2Backend, f32>::test_sum();
     }
 
     #[test]
     fn test_add_scalar() {
-        backend_tests::test_add_scalar::<AVX2Backend, f32>();
+        backend_tests::<AVX2Backend, f32>::test_add_scalar();
     }
 
     #[test]
     fn test_add_elementwise() {
-        backend_tests::test_add_elementwise::<AVX2Backend, f32>();
+        backend_tests::<AVX2Backend, f32>::test_add_elementwise();
     }
 }
