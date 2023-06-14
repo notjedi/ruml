@@ -1,9 +1,9 @@
-use aligned_vec::{avec, AVec, CACHELINE_ALIGN};
+use aligned_vec::{AVec, CACHELINE_ALIGN};
 
 use super::Backend;
 use crate::{assert_prefix_len, Tensor};
 use core::simd::{f32x8, SimdFloat};
-use std::ops::Add;
+use std::{ops::Add, sync::Arc};
 
 pub struct CpuBackend {}
 
@@ -33,93 +33,55 @@ impl Backend<f32> for CpuBackend {
         acc.reduce_sum()
     }
 
-    fn sum_axis(tensor: &Tensor<f32>, dim: usize) -> Tensor<f32> {
+    fn add_elementwise(a: &Tensor<f32>, b: &Tensor<f32>) -> Tensor<f32> {
+        assert!(a.shape() == b.shape(), "len of both tensors should match");
         debug_assert!(
-            tensor.is_contiguous(),
+            a.is_contiguous() && b.is_contiguous(),
             "vector instructions are only supported for contiguous tensors"
         );
-        let stride = tensor.shape.strides[0];
-        let total_rows = tensor.shape.shape[0];
-        let row_stride = tensor.shape.strides[dim];
-        let new_shape = tensor.shape.remove_dim(dim);
+        debug_assert!(
+            a.data.alignment() == b.data.alignment(),
+            "data must be aligned"
+        );
 
-        match dim {
-            0 => {
-                let mut data = avec![0.0 as f32; new_shape.numel()];
-                let (d_prefix, d_aligned, d_suffix) = data.as_simd_mut::<8>();
-                assert_prefix_len!(d_prefix);
+        let mut data = AVec::<f32>::with_capacity(CACHELINE_ALIGN, a.data.len());
+        let (a_prefix, a_aligned, a_suffix) = a.data.as_simd::<8>();
+        let (b_prefix, b_aligned, b_suffix) = b.data.as_simd::<8>();
+        assert_prefix_len!(a_prefix);
+        assert_prefix_len!(b_prefix);
 
-                (0..total_rows).for_each(|idx| {
-                    // let row = &tensor.data[idx * row_stride..(idx+1) * row_stride];
-                    let row = &tensor.data[idx * stride..idx * stride + stride];
-                    let (prefix, aligned, suffix) = row.as_simd::<8>();
-                    assert_prefix_len!(prefix);
+        a_aligned.iter().zip(b_aligned).for_each(|(a_vec, b_vec)| {
+            let add_vec = a_vec + b_vec;
+            add_vec.as_array().iter().for_each(|&elem| data.push(elem));
+        });
+        a_suffix.iter().zip(b_suffix).for_each(|(a_elem, b_elem)| {
+            data.push(a_elem + b_elem);
+        });
 
-                    aligned
-                        .iter()
-                        .zip(d_aligned.iter_mut())
-                        .for_each(|(&row_data, orig_data)| *orig_data += row_data);
-
-                    suffix
-                        .iter()
-                        .zip(d_suffix.iter_mut())
-                        .for_each(|(&row_data, orig_data)| *orig_data += row_data);
-                });
-                todo!()
-            }
-            1 => {
-                let mut data = AVec::<f32>::with_capacity(CACHELINE_ALIGN, new_shape.numel());
-
-                // TODO: using SIMD for 2-D tensors will only add to overhead, cause row_stride would be 1, so will be `stride` chunks
-                (0..total_rows).for_each(|idx| {
-                    let row = &tensor.data[idx * stride..idx * stride + stride];
-                    let mut acc = avec![0.0 as f32; row_stride];
-
-                    {
-                        let (d_prefix, d_aligned, d_suffix) = acc.as_simd_mut::<8>();
-                        assert_prefix_len!(d_prefix);
-
-                        row.chunks(row_stride).for_each(|chunk| {
-                            let (prefix, aligned, suffix) = chunk.as_simd::<8>();
-                            assert_prefix_len!(prefix);
-                            aligned
-                                .iter()
-                                .zip(d_aligned.iter_mut())
-                                .for_each(|(&row_data, orig_data)| *orig_data += row_data);
-                            suffix
-                                .iter()
-                                .zip(d_suffix.iter_mut())
-                                .for_each(|(&row_data, orig_data)| *orig_data += row_data);
-                        });
-                    }
-                    acc.iter().for_each(|&val| data.push(val));
-                });
-                todo!()
-            }
-            2 => {
-                let mut data = AVec::<f32>::with_capacity(CACHELINE_ALIGN, new_shape.numel());
-
-                // TODO: using SIMD for 3-D tensors will only add to overhead, cause row_stride would be 1, so will be `stride` chunks
-                (0..total_rows).for_each(|idx| {
-                    let row = &tensor.data[idx * stride..idx * stride + stride];
-                    row.chunks(row_stride).for_each(|chunk| {
-                        let (prefix, aligned, suffix) = chunk.as_simd::<8>();
-                        assert_prefix_len!(prefix);
-                        let acc = f32x8::splat(0.0 as f32);
-                        let sum = aligned.iter().fold(acc, f32x8::add);
-                        data.push(sum.reduce_sum() + suffix.iter().sum::<f32>());
-                    });
-                });
-                todo!()
-            }
-            _ => {
-                todo!()
-            }
+        Tensor {
+            data: Arc::new(data),
+            shape: a.shape.clone(),
         }
     }
 
-    fn add() {
-        todo!()
+    fn add_scalar(a: &Tensor<f32>, b: f32) -> Tensor<f32> {
+        let b_vec = f32x8::splat(b);
+        let mut data = AVec::<f32>::with_capacity(CACHELINE_ALIGN, a.data.len());
+        let (a_prefix, a_aligned, a_suffix) = a.data.as_simd::<8>();
+        assert_prefix_len!(a_prefix);
+
+        a_aligned.iter().for_each(|a_vec| {
+            let add_vec = a_vec + b_vec;
+            add_vec.as_array().iter().for_each(|&elem| data.push(elem));
+        });
+        a_suffix.iter().for_each(|a_elem| {
+            data.push(a_elem + b);
+        });
+
+        Tensor {
+            data: Arc::new(data),
+            shape: a.shape.clone(),
+        }
     }
 }
 
@@ -137,5 +99,15 @@ mod tests {
     #[test]
     fn test_sum() {
         backend_tests::test_sum::<CpuBackend>();
+    }
+
+    #[test]
+    fn test_add_elementwise() {
+        backend_tests::test_add_elementwise::<CpuBackend>();
+    }
+
+    #[test]
+    fn test_add_scalar() {
+        backend_tests::test_add_scalar::<CpuBackend>();
     }
 }

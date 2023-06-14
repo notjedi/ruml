@@ -51,9 +51,10 @@ macro_rules! assert_numel {
 
 macro_rules! assert_prefix_len {
     ($prefix:ident) => {
-        assert!(
+        debug_assert!(
             $prefix.len() == 0,
-            "bro, something is wrong w your code, check alignment of data"
+            "bro, something is wrong w your code, check alignment of data. prefix has {} elements",
+            $prefix.len()
         );
     };
 }
