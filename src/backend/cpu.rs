@@ -5,9 +5,9 @@ use crate::{assert_prefix_len, Tensor};
 use core::simd::{f32x8, SimdFloat};
 use std::{ops::Add, sync::Arc};
 
-pub struct CpuBackend {}
+pub struct AVX2Backend {}
 
-impl Backend<f32> for CpuBackend {
+impl Backend<f32> for AVX2Backend {
     fn matmul() {
         todo!()
     }
@@ -17,20 +17,11 @@ impl Backend<f32> for CpuBackend {
             tensor.is_contiguous(),
             "vector instructions are only supported for contiguous tensors"
         );
-        // TODO: as_simd does not guarantee prefix.len() and suffix.len() to be < LANES, will this affect performance?
         let (prefix, aligned, suffix) = tensor.data.as_simd::<8>();
-        let acc = f32x8::from_array([
-            prefix.iter().sum::<f32>(),
-            0.0,
-            0.0,
-            0.0,
-            0.0,
-            0.0,
-            0.0,
-            suffix.iter().sum::<f32>(),
-        ]);
+        assert_prefix_len!(prefix);
+        let acc = f32x8::splat(0.0);
         let acc = aligned.iter().fold(acc, f32x8::add);
-        acc.reduce_sum()
+        acc.reduce_sum() + suffix.iter().sum::<f32>()
     }
 
     fn add_elementwise(a: &Tensor<f32>, b: &Tensor<f32>) -> Tensor<f32> {
@@ -87,27 +78,27 @@ impl Backend<f32> for CpuBackend {
 
 #[cfg(test)]
 mod tests {
-    use super::CpuBackend;
+    use super::AVX2Backend;
     use crate::backend::tests as backend_tests;
 
     #[test]
     #[ignore = "unimplemented"]
     fn test_matmul() {
-        backend_tests::test_matmul::<CpuBackend>();
+        backend_tests::test_matmul::<AVX2Backend, f32>();
     }
 
     #[test]
     fn test_sum() {
-        backend_tests::test_sum::<CpuBackend>();
-    }
-
-    #[test]
-    fn test_add_elementwise() {
-        backend_tests::test_add_elementwise::<CpuBackend>();
+        backend_tests::test_sum::<AVX2Backend, f32>();
     }
 
     #[test]
     fn test_add_scalar() {
-        backend_tests::test_add_scalar::<CpuBackend>();
+        backend_tests::test_add_scalar::<AVX2Backend, f32>();
+    }
+
+    #[test]
+    fn test_add_elementwise() {
+        backend_tests::test_add_elementwise::<AVX2Backend, f32>();
     }
 }
