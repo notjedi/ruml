@@ -12,7 +12,11 @@ keywords = ["tensor", "tensor-library", "machine-learning"]
 
 
 [dependencies]
-rand = "0.8"
-num-traits = "0.2"
-rand_distr = "0.4"
-aligned-vec = "0.5"
+rand = { version = "0.8", default-features = false, features = ["std_rng"] }
+num-traits = { version = "0.2", default-features = false }
+rand_distr = { version = "0.4", default-features = false }
+aligned-vec = { version = "0.5", default-features = false }
+
+
+[package.metadata.docs.rs]
+all-features = true

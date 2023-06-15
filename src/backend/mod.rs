@@ -17,7 +17,7 @@ where
 
 // https://users.rust-lang.org/t/unit-tests-for-traits/86848
 pub mod tests {
-    use std::marker::PhantomData;
+    use core::marker::PhantomData;
 
     use aligned_vec::{AVec, CACHELINE_ALIGN};
 

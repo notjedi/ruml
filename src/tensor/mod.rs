@@ -6,15 +6,15 @@ use crate::{
     types::{Num, NumFloat, NumInt},
 };
 use aligned_vec::{avec, AVec, CACHELINE_ALIGN};
-use rand::Rng;
-use rand_distr::{Distribution, StandardNormal};
-use std::{
+use alloc::vec;
+use alloc::{sync::Arc, vec::Vec};
+use core::{
     assert_eq,
     fmt::{Debug, Display},
     ops::{Add, Div, Mul, Neg, Sub},
-    sync::Arc,
-    vec,
 };
+use rand::Rng;
+use rand_distr::{Distribution, StandardNormal};
 
 #[derive(Eq, PartialEq)]
 pub struct Tensor<T>
@@ -29,7 +29,7 @@ impl<T> Display for Tensor<T>
 where
     T: Num,
 {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         write!(f, "Tensor with shape {:?}", self.shape.shape)
     }
 }
@@ -38,7 +38,7 @@ impl<T> Debug for Tensor<T>
 where
     T: Num,
 {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         write!(
             f,
             "Tensor with shape: {:?} and stride: {:?} and data: {:?}",
@@ -514,7 +514,7 @@ where
                 .shape()
                 .iter()
                 .zip(other.shape())
-                .map(|(&x, &y)| std::cmp::max(x, y))
+                .map(|(&x, &y)| core::cmp::max(x, y))
                 .collect::<Vec<usize>>();
             let expanded_self = self.expand_to(&new_shape);
             let expanded_other = other.expand_to(&new_shape);

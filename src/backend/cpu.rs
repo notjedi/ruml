@@ -2,8 +2,9 @@ use aligned_vec::{AVec, CACHELINE_ALIGN};
 
 use super::Backend;
 use crate::{assert_prefix_len, Tensor};
+use alloc::sync::Arc;
+use core::ops::Add;
 use core::simd::{f32x8, SimdFloat};
-use std::{ops::Add, sync::Arc};
 
 pub struct AVX2Backend;
 

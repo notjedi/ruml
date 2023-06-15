@@ -1,4 +1,4 @@
-use std::{fmt::Debug, ops::Neg};
+use core::{fmt::Debug, ops::Neg};
 
 use num_traits::{Bounded, Float, NumAssignOps, NumCast, PrimInt, Signed};
 

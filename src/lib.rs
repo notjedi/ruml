@@ -1,3 +1,4 @@
+#![no_std]
 #![feature(portable_simd)]
 #![feature(slice_as_chunks)]
 
@@ -9,6 +10,8 @@ pub mod types;
 pub use backend::*;
 pub use ops::*;
 pub use tensor::*;
+
+extern crate alloc;
 
 macro_rules! assert_dim {
     ($dim:expr, $ndim:expr) => {
