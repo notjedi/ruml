@@ -1,7 +1,7 @@
-use aligned_vec::{avec, AVec, CACHELINE_ALIGN};
+use aligned_vec::{avec, AVec};
 
 use super::Backend;
-use crate::{assert_prefix_len, Tensor};
+use crate::{assert_prefix_len, Tensor, CACHELINE_ALIGN};
 use alloc::sync::Arc;
 use core::ops::Add;
 use core::simd::{f32x8, SimdFloat};
@@ -59,6 +59,9 @@ impl Backend<f32> for AVX2Backend {
 
     // fn sum_axis(tensor: &Tensor<f32>, dim: usize) -> Tensor<f32> {
     fn sum_axis(tensor: &Tensor<f32>, dim: usize) {
+        // i'm not really satisfied w this code, kinda feels messy and easy to break also it
+        // involves a lot of copying data to simd registers, so i'm kinda skeptical about this one
+        // and we'll have to see.
         debug_assert!(
             tensor.is_contiguous(),
             "vector instructions are only supported for contiguous tensors"

@@ -13,6 +13,8 @@ pub use tensor::*;
 
 extern crate alloc;
 
+pub const CACHELINE_ALIGN: usize = 64;
+
 macro_rules! assert_dim {
     ($dim:expr, $ndim:expr) => {
         assert!(

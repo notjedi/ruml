@@ -21,7 +21,8 @@ where
 pub mod tests {
     use core::marker::PhantomData;
 
-    use aligned_vec::{AVec, CACHELINE_ALIGN};
+    use crate::CACHELINE_ALIGN;
+    use aligned_vec::AVec;
 
     use super::*;
 

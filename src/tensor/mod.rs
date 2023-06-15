@@ -4,8 +4,9 @@ pub use self::shape::{Shape, TensorIndexIterator};
 use crate::{
     assert_dim, assert_numel,
     types::{Num, NumFloat, NumInt},
+    CACHELINE_ALIGN,
 };
-use aligned_vec::{avec, AVec, CACHELINE_ALIGN};
+use aligned_vec::{avec, AVec};
 use alloc::vec;
 use alloc::{sync::Arc, vec::Vec};
 use core::{
