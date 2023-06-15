@@ -57,8 +57,7 @@ impl Backend<f32> for AVX2Backend {
         acc.reduce_sum() + suffix.iter().sum::<f32>()
     }
 
-    // fn sum_axis(tensor: &Tensor<f32>, dim: usize) -> Tensor<f32> {
-    fn sum_axis(tensor: &Tensor<f32>, dim: usize) {
+    fn sum_axis(tensor: &Tensor<f32>, dim: usize) -> Tensor<f32> {
         // i'm not really satisfied w this code, kinda feels messy and easy to break also it
         // involves a lot of copying data to simd registers, so i'm kinda skeptical about this one
         // and we'll have to see.
@@ -88,8 +87,10 @@ impl Backend<f32> for AVX2Backend {
                         .zip(d_suffix.iter_mut())
                         .for_each(|(&row_data, orig_data)| *orig_data += row_data);
                 });
-                dbg!(&data);
-                dbg!(&new_shape.shape());
+                Tensor {
+                    data: Arc::new(data),
+                    shape: new_shape,
+                }
             }
             1 => {
                 let mut data = AVec::<f32>::with_capacity(CACHELINE_ALIGN, new_shape.numel());
@@ -123,8 +124,10 @@ impl Backend<f32> for AVX2Backend {
                     }
                     acc.iter().for_each(|&val| data.push(val));
                 });
-                dbg!(&data);
-                dbg!(&new_shape.shape());
+                Tensor {
+                    data: Arc::new(data),
+                    shape: new_shape,
+                }
             }
             2 => {
                 let mut data = AVec::<f32>::with_capacity(CACHELINE_ALIGN, new_shape.numel());
@@ -141,12 +144,12 @@ impl Backend<f32> for AVX2Backend {
                         }
                     });
                 });
-                dbg!(&data);
-                dbg!(&new_shape.shape());
+                Tensor {
+                    data: Arc::new(data),
+                    shape: new_shape,
+                }
             }
-            _ => {
-                todo!()
-            }
+            _ => tensor.sum(dim),
         }
     }
 

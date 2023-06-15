@@ -11,8 +11,7 @@ where
     fn matmul();
     fn relu(tensor: &Tensor<T>) -> Tensor<T>;
     fn sum(tensor: &Tensor<T>) -> T;
-    // fn sum_axis(tensor: &Tensor<T>, dim: usize) -> Tensor<T>;
-    fn sum_axis(tensor: &Tensor<T>, dim: usize);
+    fn sum_axis(tensor: &Tensor<T>, dim: usize) -> Tensor<T>;
     fn add_scalar(a: &Tensor<T>, b: T) -> Tensor<T>;
     fn add_elementwise(a: &Tensor<T>, b: &Tensor<T>) -> Tensor<T>;
 }
