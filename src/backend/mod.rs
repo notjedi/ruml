@@ -11,6 +11,8 @@ where
     fn matmul();
     fn relu(tensor: &Tensor<T>) -> Tensor<T>;
     fn sum(tensor: &Tensor<T>) -> T;
+    // fn sum_axis(tensor: &Tensor<T>, dim: usize) -> Tensor<T>;
+    fn sum_axis(tensor: &Tensor<T>, dim: usize);
     fn add_scalar(a: &Tensor<T>, b: T) -> Tensor<T>;
     fn add_elementwise(a: &Tensor<T>, b: &Tensor<T>) -> Tensor<T>;
 }
@@ -23,7 +25,8 @@ pub mod tests {
 
     use super::*;
 
-    pub struct Tests<T, U>
+    #[allow(non_camel_case_types)]
+    pub struct tests<T, U>
     where
         T: Backend<U>,
         U: NumFloat,
@@ -32,7 +35,7 @@ pub mod tests {
         dtype: PhantomData<U>,
     }
 
-    impl<T, U> Tests<T, U>
+    impl<T, U> tests<T, U>
     where
         T: Backend<U>,
         U: NumFloat,
@@ -66,6 +69,19 @@ pub mod tests {
             let tensor = Tensor::new(AVec::from_iter(CACHELINE_ALIGN, vals_iter));
             let out = T::sum(&tensor);
             assert_eq!(out, U::from(55).unwrap());
+        }
+
+        pub fn test_sum_axis() {
+            let shape = [4, 3, 3];
+            let len = shape.iter().product();
+            let tensor = Tensor::<U>::arange(len).reshape(&shape);
+            let out = T::sum_axis(&tensor, 0);
+            dbg!(&out);
+            let out = T::sum_axis(&tensor, 1);
+            dbg!(&out);
+            let out = T::sum_axis(&tensor, 2);
+            dbg!(&out);
+            assert!(false);
         }
 
         pub fn test_add_elementwise() {
