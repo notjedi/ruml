@@ -72,7 +72,10 @@ pub mod tests {
         }
 
         pub fn test_sum_axis() {
-            let shape = [4, 3, 3];
+            // let shape = [4, 5];
+            // let shape = [4, 3, 3];
+            // let shape = [4, 3, 10];
+            let shape = [2, 3, 4, 5];
             let len = shape.iter().product();
             let tensor = Tensor::<U>::arange(len).reshape(&shape);
             let out = T::sum_axis(&tensor, 0);

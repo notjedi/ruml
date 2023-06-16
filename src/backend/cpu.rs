@@ -65,9 +65,40 @@ impl Backend<f32> for AVX2Backend {
             tensor.is_contiguous(),
             "vector instructions are only supported for contiguous tensors"
         );
+        assert!(
+            dim < tensor.shape.ndim(),
+            "dim must be less than {}",
+            tensor.shape.ndim()
+        );
         let stride = tensor.shape.strides[0];
         let row_stride = tensor.shape.strides[dim];
         let new_shape = tensor.shape.remove_dim(dim);
+
+        fn sum_over_last_dim(tensor: &Tensor<f32>, dim: usize) -> Tensor<f32> {
+            let last_dim_elems = tensor.shape.shape[dim];
+            let new_shape = tensor.shape.remove_dim(dim);
+            let mut data = AVec::<f32>::with_capacity(CACHELINE_ALIGN, new_shape.numel());
+
+            if last_dim_elems < 8 {
+                tensor.data.chunks_exact(last_dim_elems).for_each(|chunk| {
+                    data.push(chunk.iter().sum());
+                });
+            } else {
+                tensor.data.chunks_exact(last_dim_elems).for_each(|chunk| {
+                    let mut sum = 0.0;
+                    chunk.chunks_exact(8).for_each(|oct_chunk| {
+                        let aligned = f32x8::from_slice(oct_chunk);
+                        sum += aligned.reduce_sum();
+                    });
+                    sum += chunk[(chunk.len() / 8) * 8..].iter().sum::<f32>();
+                    data.push(sum);
+                });
+            }
+            Tensor {
+                data: Arc::new(data),
+                shape: new_shape,
+            }
+        }
 
         match dim {
             0 => {
@@ -94,6 +125,9 @@ impl Backend<f32> for AVX2Backend {
             }
             1 => {
                 let mut data = AVec::<f32>::with_capacity(CACHELINE_ALIGN, new_shape.numel());
+                dbg!(tensor.data.len());
+                dbg!(stride);
+                dbg!(row_stride);
 
                 // TODO: using SIMD for 2-D tensors will only add to overhead, cause row_stride would be 1, so will be `stride` chunks
                 tensor.data.chunks_exact(stride).for_each(|row| {
@@ -114,12 +148,20 @@ impl Backend<f32> for AVX2Backend {
                                     })
                             });
                         } else {
-                            row.chunks_exact(row_stride)
-                                .zip(d_aligned.iter_mut())
-                                .for_each(|(chunk, d_simd)| {
-                                    let aligned = f32x8::from_slice(chunk);
-                                    *d_simd += aligned;
-                                });
+                            row.chunks_exact(row_stride).for_each(|chunk| {
+                                chunk.chunks_exact(8).zip(d_aligned.iter_mut()).for_each(
+                                    |(oct_chunk, d_simd)| {
+                                        let aligned = f32x8::from_slice(oct_chunk);
+                                        *d_simd += aligned;
+                                    },
+                                );
+                                chunk[chunk.len() - d_suffix.len()..]
+                                    .iter()
+                                    .zip(d_suffix.iter_mut())
+                                    .for_each(|(elem, suffix)| {
+                                        *suffix += elem;
+                                    });
+                            });
                         }
                     }
                     acc.iter().for_each(|&val| data.push(val));
@@ -131,25 +173,41 @@ impl Backend<f32> for AVX2Backend {
             }
             2 => {
                 let mut data = AVec::<f32>::with_capacity(CACHELINE_ALIGN, new_shape.numel());
-                let row_stride = tensor.shape.strides[1];
 
-                // TODO: using SIMD for 3-D tensors will only add to overhead, cause row_stride would be 1, so will be `stride` chunks
-                tensor.data.chunks_exact(stride).for_each(|row| {
-                    row.chunks_exact(row_stride).for_each(|chunk| {
-                        if chunk.len() < 8 {
-                            data.push(chunk.iter().sum());
-                        } else {
-                            let aligned = f32x8::from_slice(chunk);
-                            data.push(aligned.reduce_sum());
-                        }
+                if row_stride == 1 {
+                    // 3-D tensor
+                    sum_over_last_dim(tensor, dim)
+                } else {
+                    // 4-D tensor
+                    let prev_stride = tensor.shape.strides[dim - 1];
+                    tensor.data.chunks_exact(prev_stride).for_each(|row| {
+                        let mut acc = avec![0.0 as f32; row_stride];
+                        let (_, d_aligned, d_suffix) = acc.as_simd_mut::<8>();
+
+                        row.chunks_exact(row_stride).for_each(|chunk| {
+                            chunk.chunks_exact(8).zip(d_aligned.iter_mut()).for_each(
+                                |(oct_chunk, d_simd)| {
+                                    let aligned = f32x8::from_slice(oct_chunk);
+                                    *d_simd += aligned;
+                                },
+                            );
+                            chunk[chunk.len() - d_suffix.len()..]
+                                .iter()
+                                .zip(d_suffix.iter_mut())
+                                .for_each(|(&elem, suffix)| {
+                                    *suffix += elem;
+                                });
+                        });
+                        acc.iter().for_each(|&val| data.push(val));
                     });
-                });
-                Tensor {
-                    data: Arc::new(data),
-                    shape: new_shape,
+                    Tensor {
+                        data: Arc::new(data),
+                        shape: new_shape,
+                    }
                 }
             }
-            _ => tensor.sum(dim),
+            3 => sum_over_last_dim(tensor, dim),
+            _ => panic!("you shouldn't be here bro"),
         }
     }
 
