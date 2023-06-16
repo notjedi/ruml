@@ -225,6 +225,63 @@ impl Backend<f32> for AVX2Backend {
         }
     }
 
+    fn sub_scalar(a: &Tensor<f32>, b: f32) -> Tensor<f32> {
+        let b_vec = f32x8::splat(b);
+        let mut data = AVec::<f32>::with_capacity(CACHELINE_ALIGN, a.data.len());
+        let (_, a_aligned, a_suffix) = a.data.as_simd::<8>();
+
+        a_aligned.iter().for_each(|a_vec| {
+            let add_vec = a_vec - b_vec;
+            add_vec.as_array().iter().for_each(|&elem| data.push(elem));
+        });
+        a_suffix.iter().for_each(|a_elem| {
+            data.push(a_elem - b);
+        });
+
+        Tensor {
+            data: Arc::new(data),
+            shape: a.shape.clone(),
+        }
+    }
+
+    fn mul_scalar(a: &Tensor<f32>, b: f32) -> Tensor<f32> {
+        let b_vec = f32x8::splat(b);
+        let mut data = AVec::<f32>::with_capacity(CACHELINE_ALIGN, a.data.len());
+        let (_, a_aligned, a_suffix) = a.data.as_simd::<8>();
+
+        a_aligned.iter().for_each(|a_vec| {
+            let add_vec = a_vec * b_vec;
+            add_vec.as_array().iter().for_each(|&elem| data.push(elem));
+        });
+        a_suffix.iter().for_each(|a_elem| {
+            data.push(a_elem * b);
+        });
+
+        Tensor {
+            data: Arc::new(data),
+            shape: a.shape.clone(),
+        }
+    }
+
+    fn div_scalar(a: &Tensor<f32>, b: f32) -> Tensor<f32> {
+        let b_vec = f32x8::splat(b);
+        let mut data = AVec::<f32>::with_capacity(CACHELINE_ALIGN, a.data.len());
+        let (_, a_aligned, a_suffix) = a.data.as_simd::<8>();
+
+        a_aligned.iter().for_each(|a_vec| {
+            let add_vec = a_vec / b_vec;
+            add_vec.as_array().iter().for_each(|&elem| data.push(elem));
+        });
+        a_suffix.iter().for_each(|a_elem| {
+            data.push(a_elem / b);
+        });
+
+        Tensor {
+            data: Arc::new(data),
+            shape: a.shape.clone(),
+        }
+    }
+
     fn add_elementwise(a: &Tensor<f32>, b: &Tensor<f32>) -> Tensor<f32> {
         assert!(a.shape() == b.shape(), "len of both tensors should match");
         debug_assert!(
@@ -246,6 +303,64 @@ impl Backend<f32> for AVX2Backend {
         });
         a_suffix.iter().zip(b_suffix).for_each(|(a_elem, b_elem)| {
             data.push(a_elem + b_elem);
+        });
+
+        Tensor {
+            data: Arc::new(data),
+            shape: a.shape.clone(),
+        }
+    }
+
+    fn sub_elementwise(a: &Tensor<f32>, b: &Tensor<f32>) -> Tensor<f32> {
+        assert!(a.shape() == b.shape(), "len of both tensors should match");
+        debug_assert!(
+            a.is_contiguous() && b.is_contiguous(),
+            "vector instructions are only supported for contiguous tensors"
+        );
+        debug_assert!(
+            a.data.alignment() == b.data.alignment(),
+            "data must be aligned"
+        );
+
+        let mut data = AVec::<f32>::with_capacity(CACHELINE_ALIGN, a.data.len());
+        let (_, a_aligned, a_suffix) = a.data.as_simd::<8>();
+        let (_, b_aligned, b_suffix) = b.data.as_simd::<8>();
+
+        a_aligned.iter().zip(b_aligned).for_each(|(a_vec, b_vec)| {
+            let add_vec = a_vec - b_vec;
+            add_vec.as_array().iter().for_each(|&elem| data.push(elem));
+        });
+        a_suffix.iter().zip(b_suffix).for_each(|(a_elem, b_elem)| {
+            data.push(a_elem - b_elem);
+        });
+
+        Tensor {
+            data: Arc::new(data),
+            shape: a.shape.clone(),
+        }
+    }
+
+    fn mul_elementwise(a: &Tensor<f32>, b: &Tensor<f32>) -> Tensor<f32> {
+        assert!(a.shape() == b.shape(), "len of both tensors should match");
+        debug_assert!(
+            a.is_contiguous() && b.is_contiguous(),
+            "vector instructions are only supported for contiguous tensors"
+        );
+        debug_assert!(
+            a.data.alignment() == b.data.alignment(),
+            "data must be aligned"
+        );
+
+        let mut data = AVec::<f32>::with_capacity(CACHELINE_ALIGN, a.data.len());
+        let (_, a_aligned, a_suffix) = a.data.as_simd::<8>();
+        let (_, b_aligned, b_suffix) = b.data.as_simd::<8>();
+
+        a_aligned.iter().zip(b_aligned).for_each(|(a_vec, b_vec)| {
+            let add_vec = a_vec * b_vec;
+            add_vec.as_array().iter().for_each(|&elem| data.push(elem));
+        });
+        a_suffix.iter().zip(b_suffix).for_each(|(a_elem, b_elem)| {
+            data.push(a_elem * b_elem);
         });
 
         Tensor {
