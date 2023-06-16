@@ -307,19 +307,6 @@ where
         self.shape.is_contiguous()
     }
 
-    // #[inline]
-    // pub fn row(&self, idx: usize) -> &[T] {
-    //     // NOTE, BUG: TODO: Only works for contiguous tensors
-    //     let total_rows = self.shape.shape[0..self.shape.ndim() - 1].iter().product();
-    //     assert!(
-    //         idx < total_rows,
-    //         "row idx should be less then {}",
-    //         total_rows
-    //     );
-    //     let row_size = self.shape.shape[self.shape.ndim() - 1];
-    //     &self.data[self.shape.offset + idx * row_size..(idx + 1) * row_size + self.shape.offset]
-    // }
-
     #[inline]
     pub fn flatten(&self) -> Self {
         if self.shape.is_contiguous() {
@@ -763,15 +750,6 @@ mod tests {
             "elements don't match for the Tensor::arange tensor"
         );
     }
-
-    // #[test]
-    // fn test_tensor_row() {
-    //     let shape_vec = vec![3, 4, 5];
-    //     let shape: Shape = shape_vec.clone().into();
-    //     let arange_tensor: Tensor<f32> = Tensor::arange(shape.numel()).reshape(&shape_vec);
-    //     assert_eq!(arange_tensor.row(0), &[0.0, 1.0, 2.0, 3.0, 4.0]);
-    //     assert_eq!(arange_tensor.row(11), &[55.0, 56.0, 57.0, 58.0, 59.0]);
-    // }
 
     #[test]
     fn test_tensor_iter() {

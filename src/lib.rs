@@ -13,7 +13,7 @@ pub use tensor::*;
 
 extern crate alloc;
 
-pub const CACHELINE_ALIGN: usize = 64;
+pub const CACHELINE_ALIGN: usize = 32;
 
 macro_rules! assert_dim {
     ($dim:expr, $ndim:expr) => {
@@ -54,16 +54,5 @@ macro_rules! assert_numel {
     };
 }
 
-macro_rules! assert_prefix_len {
-    ($prefix:ident) => {
-        debug_assert!(
-            $prefix.len() == 0,
-            "bro, something is wrong w your code, check alignment of data. prefix has {} elements",
-            $prefix.len()
-        );
-    };
-}
-
 pub(crate) use assert_dim;
 pub(crate) use assert_numel;
-pub(crate) use assert_prefix_len;

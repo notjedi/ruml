@@ -72,12 +72,12 @@ pub mod tests {
         }
 
         pub fn test_sum_axis() {
-            // let shape = [4, 5];
-            // let shape = [4, 3, 3];
-            // let shape = [4, 3, 10];
+            // TODO: test on more shapes and different dims
             let shape = [2, 3, 4, 5];
             let len = shape.iter().product();
             let tensor = Tensor::<U>::arange(len).reshape(&shape);
+
+            // dim 0
             let out = T::sum_axis(&tensor, 0);
             [
                 60, 62, 64, 66, 68, 70, 72, 74, 76, 78, 80, 82, 84, 86, 88, 90, 92, 94, 96, 98,
@@ -90,6 +90,8 @@ pub mod tests {
             .for_each(|(&g_truth, &res)| {
                 assert_eq!(U::from(g_truth).unwrap(), res);
             });
+
+            // dim 1
             let out = T::sum_axis(&tensor, 1);
             [
                 60, 63, 66, 69, 72, 75, 78, 81, 84, 87, 90, 93, 96, 99, 102, 105, 108, 111, 114,
@@ -101,6 +103,8 @@ pub mod tests {
             .for_each(|(&g_truth, &res)| {
                 assert_eq!(U::from(g_truth).unwrap(), res);
             });
+
+            // dim 2
             let out = T::sum_axis(&tensor, 2);
             [
                 30, 34, 38, 42, 46, 110, 114, 118, 122, 126, 190, 194, 198, 202, 206, 270, 274,
@@ -111,6 +115,8 @@ pub mod tests {
             .for_each(|(&g_truth, &res)| {
                 assert_eq!(U::from(g_truth).unwrap(), res);
             });
+
+            // dim 3
             let out = T::sum_axis(&tensor, 3);
             [
                 10, 35, 60, 85, 110, 135, 160, 185, 210, 235, 260, 285, 310, 335, 360, 385, 410,

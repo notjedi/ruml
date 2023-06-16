@@ -1,7 +1,7 @@
 use aligned_vec::{avec, AVec};
 
 use super::Backend;
-use crate::{assert_prefix_len, Tensor, CACHELINE_ALIGN};
+use crate::{Tensor, CACHELINE_ALIGN};
 use alloc::sync::Arc;
 use core::ops::Add;
 use core::simd::{f32x8, SimdFloat};
@@ -19,9 +19,8 @@ impl Backend<f32> for AVX2Backend {
             "vector instructions are only supported for contiguous tensors"
         );
         let mut data = AVec::<f32>::with_capacity(CACHELINE_ALIGN, tensor.data.len());
-        let (prefix, aligned, suffix) = tensor.data.as_simd::<8>();
+        let (_, aligned, suffix) = tensor.data.as_simd::<8>();
         let zeros = f32x8::splat(0.0);
-        assert_prefix_len!(prefix);
 
         aligned.iter().for_each(|&vec| {
             let mask = vec.is_sign_positive();
@@ -50,8 +49,7 @@ impl Backend<f32> for AVX2Backend {
             tensor.is_contiguous(),
             "vector instructions are only supported for contiguous tensors"
         );
-        let (prefix, aligned, suffix) = tensor.data.as_simd::<8>();
-        assert_prefix_len!(prefix);
+        let (_, aligned, suffix) = tensor.data.as_simd::<8>();
         let acc = f32x8::splat(0.0);
         let acc = aligned.iter().fold(acc, f32x8::add);
         acc.reduce_sum() + suffix.iter().sum::<f32>()
@@ -211,8 +209,7 @@ impl Backend<f32> for AVX2Backend {
     fn add_scalar(a: &Tensor<f32>, b: f32) -> Tensor<f32> {
         let b_vec = f32x8::splat(b);
         let mut data = AVec::<f32>::with_capacity(CACHELINE_ALIGN, a.data.len());
-        let (a_prefix, a_aligned, a_suffix) = a.data.as_simd::<8>();
-        assert_prefix_len!(a_prefix);
+        let (_, a_aligned, a_suffix) = a.data.as_simd::<8>();
 
         a_aligned.iter().for_each(|a_vec| {
             let add_vec = a_vec + b_vec;
@@ -240,10 +237,8 @@ impl Backend<f32> for AVX2Backend {
         );
 
         let mut data = AVec::<f32>::with_capacity(CACHELINE_ALIGN, a.data.len());
-        let (a_prefix, a_aligned, a_suffix) = a.data.as_simd::<8>();
-        let (b_prefix, b_aligned, b_suffix) = b.data.as_simd::<8>();
-        assert_prefix_len!(a_prefix);
-        assert_prefix_len!(b_prefix);
+        let (_, a_aligned, a_suffix) = a.data.as_simd::<8>();
+        let (_, b_aligned, b_suffix) = b.data.as_simd::<8>();
 
         a_aligned.iter().zip(b_aligned).for_each(|(a_vec, b_vec)| {
             let add_vec = a_vec + b_vec;
