@@ -23,6 +23,10 @@ impl Shape {
         // Right now, we only support row major stride by default
         assert!(!shape.is_empty(), "shape should not be an empty vec");
         assert!(
+            shape.len() <= 4,
+            "shape of len > 4 is not supported as of now"
+        );
+        assert!(
             !shape.iter().any(|&x| x == 0),
             "{:?} should not contain 0",
             shape

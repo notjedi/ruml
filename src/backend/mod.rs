@@ -79,12 +79,48 @@ pub mod tests {
             let len = shape.iter().product();
             let tensor = Tensor::<U>::arange(len).reshape(&shape);
             let out = T::sum_axis(&tensor, 0);
-            dbg!(&out);
+            [
+                60, 62, 64, 66, 68, 70, 72, 74, 76, 78, 80, 82, 84, 86, 88, 90, 92, 94, 96, 98,
+                100, 102, 104, 106, 108, 110, 112, 114, 116, 118, 120, 122, 124, 126, 128, 130,
+                132, 134, 136, 138, 140, 142, 144, 146, 148, 150, 152, 154, 156, 158, 160, 162,
+                164, 166, 168, 170, 172, 174, 176, 178,
+            ]
+            .iter()
+            .zip(out.data.iter())
+            .for_each(|(&g_truth, &res)| {
+                assert_eq!(U::from(g_truth).unwrap(), res);
+            });
             let out = T::sum_axis(&tensor, 1);
-            dbg!(&out);
+            [
+                60, 63, 66, 69, 72, 75, 78, 81, 84, 87, 90, 93, 96, 99, 102, 105, 108, 111, 114,
+                117, 240, 243, 246, 249, 252, 255, 258, 261, 264, 267, 270, 273, 276, 279, 282,
+                285, 288, 291, 294, 297,
+            ]
+            .iter()
+            .zip(out.data.iter())
+            .for_each(|(&g_truth, &res)| {
+                assert_eq!(U::from(g_truth).unwrap(), res);
+            });
             let out = T::sum_axis(&tensor, 2);
-            dbg!(&out);
-            assert!(false);
+            [
+                30, 34, 38, 42, 46, 110, 114, 118, 122, 126, 190, 194, 198, 202, 206, 270, 274,
+                278, 282, 286, 350, 354, 358, 362, 366, 430, 434, 438, 442, 446,
+            ]
+            .iter()
+            .zip(out.data.iter())
+            .for_each(|(&g_truth, &res)| {
+                assert_eq!(U::from(g_truth).unwrap(), res);
+            });
+            let out = T::sum_axis(&tensor, 3);
+            [
+                10, 35, 60, 85, 110, 135, 160, 185, 210, 235, 260, 285, 310, 335, 360, 385, 410,
+                435, 460, 485, 510, 535, 560, 585,
+            ]
+            .iter()
+            .zip(out.data.iter())
+            .for_each(|(&g_truth, &res)| {
+                assert_eq!(U::from(g_truth).unwrap(), res);
+            });
         }
 
         pub fn test_add_elementwise() {

@@ -125,9 +125,6 @@ impl Backend<f32> for AVX2Backend {
             }
             1 => {
                 let mut data = AVec::<f32>::with_capacity(CACHELINE_ALIGN, new_shape.numel());
-                dbg!(tensor.data.len());
-                dbg!(stride);
-                dbg!(row_stride);
 
                 // TODO: using SIMD for 2-D tensors will only add to overhead, cause row_stride would be 1, so will be `stride` chunks
                 tensor.data.chunks_exact(stride).for_each(|row| {
