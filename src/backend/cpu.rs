@@ -5,6 +5,7 @@ use crate::{Tensor, CACHELINE_ALIGN};
 use alloc::sync::Arc;
 use core::ops::Add;
 use core::simd::{f32x8, SimdFloat};
+use std::simd::StdFloat;
 
 pub struct AVX2Backend;
 
@@ -36,6 +37,24 @@ impl Backend<f32> for AVX2Backend {
             } else {
                 data.push(x)
             }
+        });
+
+        Tensor {
+            data: Arc::new(data),
+            shape: tensor.shape.clone(),
+        }
+    }
+
+    fn sqrt(tensor: &Tensor<f32>) -> Tensor<f32> {
+        let mut data = AVec::<f32>::with_capacity(CACHELINE_ALIGN, tensor.data.len());
+        let (_, aligned, suffix) = tensor.data.as_simd::<8>();
+
+        aligned.iter().for_each(|simd_chunk| {
+            let sqrt = simd_chunk.sqrt();
+            sqrt.as_array().iter().for_each(|&elem| data.push(elem));
+        });
+        suffix.iter().for_each(|elem| {
+            data.push(elem.sqrt());
         });
 
         Tensor {
