@@ -95,6 +95,54 @@ impl Backend<f32> for AVX2Backend {
         }
     }
 
+    fn sigmoid(tensor: &Tensor<f32>) -> Tensor<f32> {
+        let mut data = AVec::<f32>::with_capacity(CACHELINE_ALIGN, tensor.data.len());
+        tensor
+            .data
+            .array_chunks::<{ Self::CHUNK_SIZE }>()
+            .for_each(|&chunk| {
+                let chunk_simd = wide::f32x8::from(chunk);
+                let sigmoid = (1.0 + (-chunk_simd).exp()).recip();
+                sigmoid
+                    .to_array()
+                    .into_iter()
+                    .for_each(|val| data.push(val));
+            });
+        tensor.data[(data.len() / Self::CHUNK_SIZE) * Self::CHUNK_SIZE..]
+            .iter()
+            .for_each(|val| data.push(1.0 / (1.0 + (-val).exp())));
+
+        Tensor {
+            data: Arc::new(data),
+            shape: tensor.shape.clone(),
+        }
+    }
+
+    fn silu(tensor: &Tensor<f32>) -> Tensor<f32> {
+        let mut data = AVec::<f32>::with_capacity(CACHELINE_ALIGN, tensor.data.len());
+
+        tensor
+            .data
+            .array_chunks::<{ Self::CHUNK_SIZE }>()
+            .for_each(|&chunk| {
+                let chunk_simd = wide::f32x8::from(chunk);
+                let sigmoid = (1.0 + (-chunk_simd).exp()).recip();
+                let silu = chunk_simd * sigmoid;
+                silu.to_array().into_iter().for_each(|val| data.push(val));
+            });
+        tensor.data[(data.len() / Self::CHUNK_SIZE) * Self::CHUNK_SIZE..]
+            .iter()
+            .for_each(|val| {
+                let sigmoid = 1.0 / (1.0 + (-val).exp());
+                data.push(val * sigmoid);
+            });
+
+        Tensor {
+            data: Arc::new(data),
+            shape: tensor.shape.clone(),
+        }
+    }
+
     fn sum(tensor: &Tensor<f32>) -> f32 {
         debug_assert!(
             tensor.is_contiguous(),
@@ -437,6 +485,26 @@ mod tests {
     #[test]
     fn test_relu() {
         backend_tests::<AVX2Backend, f32>::test_relu();
+    }
+
+    #[test]
+    fn test_log2() {
+        backend_tests::<AVX2Backend, f32>::test_log2();
+    }
+
+    #[test]
+    fn test_exp() {
+        backend_tests::<AVX2Backend, f32>::test_exp();
+    }
+
+    #[test]
+    fn test_silu() {
+        backend_tests::<AVX2Backend, f32>::test_silu();
+    }
+
+    #[test]
+    fn test_sigmoid() {
+        backend_tests::<AVX2Backend, f32>::test_sigmoid();
     }
 
     #[test]
