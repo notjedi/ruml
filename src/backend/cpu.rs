@@ -63,6 +63,38 @@ impl Backend<f32> for AVX2Backend {
         }
     }
 
+    fn log2(tensor: &Tensor<f32>) -> Tensor<f32> {
+        let mut data = AVec::<f32>::with_capacity(CACHELINE_ALIGN, tensor.data.len());
+        tensor.data.array_chunks::<8>().for_each(|&chunk| {
+            let log = wide::f32x8::from(chunk).log2();
+            log.to_array().into_iter().for_each(|val| data.push(val));
+        });
+        tensor.data[(data.len() / 8) * 8..]
+            .iter()
+            .for_each(|val| data.push(val.log2()));
+
+        Tensor {
+            data: Arc::new(data),
+            shape: tensor.shape.clone(),
+        }
+    }
+
+    fn exp(tensor: &Tensor<f32>) -> Tensor<f32> {
+        let mut data = AVec::<f32>::with_capacity(CACHELINE_ALIGN, tensor.data.len());
+        tensor.data.array_chunks::<8>().for_each(|&chunk| {
+            let exp = wide::f32x8::from(chunk).exp();
+            exp.to_array().into_iter().for_each(|val| data.push(val));
+        });
+        tensor.data[(data.len() / 8) * 8..]
+            .iter()
+            .for_each(|val| data.push(val.exp()));
+
+        Tensor {
+            data: Arc::new(data),
+            shape: tensor.shape.clone(),
+        }
+    }
+
     fn sum(tensor: &Tensor<f32>) -> f32 {
         debug_assert!(
             tensor.is_contiguous(),
