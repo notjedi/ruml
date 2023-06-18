@@ -10,17 +10,53 @@ use std::simd::StdFloat;
 pub struct AVX2Backend;
 
 impl Backend<f32> for AVX2Backend {
+    const CHUNK_SIZE: usize = 8;
+
     fn matmul() {
         todo!()
     }
 
-    fn relu(tensor: &Tensor<f32>) -> Tensor<f32> {
-        debug_assert!(
-            tensor.is_contiguous(),
-            "vector instructions are only supported for contiguous tensors"
-        );
+    fn exp(tensor: &Tensor<f32>) -> Tensor<f32> {
         let mut data = AVec::<f32>::with_capacity(CACHELINE_ALIGN, tensor.data.len());
-        let (_, aligned, suffix) = tensor.data.as_simd::<8>();
+        tensor
+            .data
+            .array_chunks::<{ Self::CHUNK_SIZE }>()
+            .for_each(|&chunk| {
+                let exp = wide::f32x8::from(chunk).exp();
+                exp.to_array().into_iter().for_each(|val| data.push(val));
+            });
+        tensor.data[(data.len() / Self::CHUNK_SIZE) * Self::CHUNK_SIZE..]
+            .iter()
+            .for_each(|val| data.push(val.exp()));
+
+        Tensor {
+            data: Arc::new(data),
+            shape: tensor.shape.clone(),
+        }
+    }
+
+    fn log2(tensor: &Tensor<f32>) -> Tensor<f32> {
+        let mut data = AVec::<f32>::with_capacity(CACHELINE_ALIGN, tensor.data.len());
+        tensor
+            .data
+            .array_chunks::<{ Self::CHUNK_SIZE }>()
+            .for_each(|&chunk| {
+                let log = wide::f32x8::from(chunk).log2();
+                log.to_array().into_iter().for_each(|val| data.push(val));
+            });
+        tensor.data[(data.len() / Self::CHUNK_SIZE) * Self::CHUNK_SIZE..]
+            .iter()
+            .for_each(|val| data.push(val.log2()));
+
+        Tensor {
+            data: Arc::new(data),
+            shape: tensor.shape.clone(),
+        }
+    }
+
+    fn relu(tensor: &Tensor<f32>) -> Tensor<f32> {
+        let mut data = AVec::<f32>::with_capacity(CACHELINE_ALIGN, tensor.data.len());
+        let (_, aligned, suffix) = tensor.data.as_simd::<{ Self::CHUNK_SIZE }>();
         let zeros = f32x8::splat(0.0);
 
         aligned.iter().for_each(|&vec| {
@@ -47,7 +83,7 @@ impl Backend<f32> for AVX2Backend {
 
     fn sqrt(tensor: &Tensor<f32>) -> Tensor<f32> {
         let mut data = AVec::<f32>::with_capacity(CACHELINE_ALIGN, tensor.data.len());
-        let (_, aligned, suffix) = tensor.data.as_simd::<8>();
+        let (_, aligned, suffix) = tensor.data.as_simd::<{ Self::CHUNK_SIZE }>();
 
         aligned.iter().for_each(|simd_chunk| {
             let sqrt = simd_chunk.sqrt();
@@ -63,31 +99,23 @@ impl Backend<f32> for AVX2Backend {
         }
     }
 
-    fn log2(tensor: &Tensor<f32>) -> Tensor<f32> {
+    fn silu(tensor: &Tensor<f32>) -> Tensor<f32> {
         let mut data = AVec::<f32>::with_capacity(CACHELINE_ALIGN, tensor.data.len());
-        tensor.data.array_chunks::<8>().for_each(|&chunk| {
-            let log = wide::f32x8::from(chunk).log2();
-            log.to_array().into_iter().for_each(|val| data.push(val));
-        });
-        tensor.data[(data.len() / 8) * 8..]
+        tensor
+            .data
+            .array_chunks::<{ Self::CHUNK_SIZE }>()
+            .for_each(|&chunk| {
+                let chunk_simd = wide::f32x8::from(chunk);
+                let sigmoid = (1.0 + (-chunk_simd).exp()).recip();
+                let silu = chunk_simd * sigmoid;
+                silu.to_array().into_iter().for_each(|val| data.push(val));
+            });
+        tensor.data[(data.len() / Self::CHUNK_SIZE) * Self::CHUNK_SIZE..]
             .iter()
-            .for_each(|val| data.push(val.log2()));
-
-        Tensor {
-            data: Arc::new(data),
-            shape: tensor.shape.clone(),
-        }
-    }
-
-    fn exp(tensor: &Tensor<f32>) -> Tensor<f32> {
-        let mut data = AVec::<f32>::with_capacity(CACHELINE_ALIGN, tensor.data.len());
-        tensor.data.array_chunks::<8>().for_each(|&chunk| {
-            let exp = wide::f32x8::from(chunk).exp();
-            exp.to_array().into_iter().for_each(|val| data.push(val));
-        });
-        tensor.data[(data.len() / 8) * 8..]
-            .iter()
-            .for_each(|val| data.push(val.exp()));
+            .for_each(|val| {
+                let sigmoid = 1.0 / (1.0 + (-val).exp());
+                data.push(val * sigmoid);
+            });
 
         Tensor {
             data: Arc::new(data),
@@ -118,37 +146,12 @@ impl Backend<f32> for AVX2Backend {
         }
     }
 
-    fn silu(tensor: &Tensor<f32>) -> Tensor<f32> {
-        let mut data = AVec::<f32>::with_capacity(CACHELINE_ALIGN, tensor.data.len());
-
-        tensor
-            .data
-            .array_chunks::<{ Self::CHUNK_SIZE }>()
-            .for_each(|&chunk| {
-                let chunk_simd = wide::f32x8::from(chunk);
-                let sigmoid = (1.0 + (-chunk_simd).exp()).recip();
-                let silu = chunk_simd * sigmoid;
-                silu.to_array().into_iter().for_each(|val| data.push(val));
-            });
-        tensor.data[(data.len() / Self::CHUNK_SIZE) * Self::CHUNK_SIZE..]
-            .iter()
-            .for_each(|val| {
-                let sigmoid = 1.0 / (1.0 + (-val).exp());
-                data.push(val * sigmoid);
-            });
-
-        Tensor {
-            data: Arc::new(data),
-            shape: tensor.shape.clone(),
-        }
-    }
-
     fn sum(tensor: &Tensor<f32>) -> f32 {
         debug_assert!(
             tensor.is_contiguous(),
             "vector instructions are only supported for contiguous tensors"
         );
-        let (_, aligned, suffix) = tensor.data.as_simd::<8>();
+        let (_, aligned, suffix) = tensor.data.as_simd::<{ Self::CHUNK_SIZE }>();
         let acc = f32x8::splat(0.0);
         let acc = aligned.iter().fold(acc, f32x8::add);
         acc.reduce_sum() + suffix.iter().sum::<f32>()
@@ -172,22 +175,27 @@ impl Backend<f32> for AVX2Backend {
         let new_shape = tensor.shape.remove_dim(dim);
 
         fn sum_over_last_dim(tensor: &Tensor<f32>, dim: usize) -> Tensor<f32> {
+            // https://stackoverflow.com/questions/47967549/what-is-the-rationale-for-not-being-able-to-use-the-outer-type-parameter-within
+            // can't use Self::CHUNK_SIZE inside this func
+            const CHUNK_SIZE: usize = 8;
             let last_dim_elems = tensor.shape.shape[dim];
             let new_shape = tensor.shape.remove_dim(dim);
             let mut data = AVec::<f32>::with_capacity(CACHELINE_ALIGN, new_shape.numel());
 
-            if last_dim_elems < 8 {
+            if last_dim_elems < CHUNK_SIZE {
                 tensor.data.chunks_exact(last_dim_elems).for_each(|chunk| {
                     data.push(chunk.iter().sum());
                 });
             } else {
                 tensor.data.chunks_exact(last_dim_elems).for_each(|chunk| {
                     let mut sum = 0.0;
-                    chunk.array_chunks::<8>().for_each(|&oct_chunk| {
+                    chunk.array_chunks::<CHUNK_SIZE>().for_each(|&oct_chunk| {
                         let aligned = f32x8::from_array(oct_chunk);
                         sum += aligned.reduce_sum();
                     });
-                    sum += chunk[(chunk.len() / 8) * 8..].iter().sum::<f32>();
+                    sum += chunk[(chunk.len() / CHUNK_SIZE) * CHUNK_SIZE..]
+                        .iter()
+                        .sum::<f32>();
                     data.push(sum);
                 });
             }
@@ -200,17 +208,17 @@ impl Backend<f32> for AVX2Backend {
         match dim {
             0 => {
                 let mut data = avec![0.0 as f32; new_shape.numel()];
-                let (_, d_aligned, d_suffix) = data.as_simd_mut::<8>();
+                let (_, d_aligned, d_suffix) = data.as_simd_mut::<{ Self::CHUNK_SIZE }>();
 
                 tensor.data.chunks_exact(stride).for_each(|row| {
-                    row.array_chunks::<8>().zip(d_aligned.iter_mut()).for_each(
-                        |(&chunk, d_simd)| {
+                    row.array_chunks::<{ Self::CHUNK_SIZE }>()
+                        .zip(d_aligned.iter_mut())
+                        .for_each(|(&chunk, d_simd)| {
                             let aligned = f32x8::from_array(chunk);
                             *d_simd += aligned;
-                        },
-                    );
+                        });
 
-                    row[(row.len() / 8) * 8..]
+                    row[(row.len() / Self::CHUNK_SIZE) * Self::CHUNK_SIZE..]
                         .iter()
                         .zip(d_suffix.iter_mut())
                         .for_each(|(&row_data, orig_data)| *orig_data += row_data);
@@ -227,7 +235,7 @@ impl Backend<f32> for AVX2Backend {
                 tensor.data.chunks_exact(stride).for_each(|row| {
                     let mut acc = avec![0.0 as f32; row_stride];
                     {
-                        let (_, d_aligned, d_suffix) = acc.as_simd_mut::<8>();
+                        let (_, d_aligned, d_suffix) = acc.as_simd_mut::<{ Self::CHUNK_SIZE }>();
                         if d_aligned.len() == 0 {
                             // NOTE: row_stride < 8, so we need to iterate over the suffix bug, ig
                             // we are not guaranteed that d_aligned will have elements even if
@@ -244,7 +252,7 @@ impl Backend<f32> for AVX2Backend {
                         } else {
                             row.chunks_exact(row_stride).for_each(|chunk| {
                                 chunk
-                                    .array_chunks::<8>()
+                                    .array_chunks::<{ Self::CHUNK_SIZE }>()
                                     .zip(d_aligned.iter_mut())
                                     .for_each(|(&oct_chunk, d_simd)| {
                                         let aligned = f32x8::from_array(oct_chunk);
@@ -277,11 +285,11 @@ impl Backend<f32> for AVX2Backend {
                     let prev_stride = tensor.shape.strides[dim - 1];
                     tensor.data.chunks_exact(prev_stride).for_each(|row| {
                         let mut acc = avec![0.0 as f32; row_stride];
-                        let (_, d_aligned, d_suffix) = acc.as_simd_mut::<8>();
+                        let (_, d_aligned, d_suffix) = acc.as_simd_mut::<{ Self::CHUNK_SIZE }>();
 
                         row.chunks_exact(row_stride).for_each(|chunk| {
                             chunk
-                                .array_chunks::<8>()
+                                .array_chunks::<{ Self::CHUNK_SIZE }>()
                                 .zip(d_aligned.iter_mut())
                                 .for_each(|(&oct_chunk, d_simd)| {
                                     let aligned = f32x8::from_array(oct_chunk);
@@ -310,7 +318,7 @@ impl Backend<f32> for AVX2Backend {
     fn add_scalar(a: &Tensor<f32>, b: f32) -> Tensor<f32> {
         let b_vec = f32x8::splat(b);
         let mut data = AVec::<f32>::with_capacity(CACHELINE_ALIGN, a.data.len());
-        let (_, a_aligned, a_suffix) = a.data.as_simd::<8>();
+        let (_, a_aligned, a_suffix) = a.data.as_simd::<{ Self::CHUNK_SIZE }>();
 
         a_aligned.iter().for_each(|a_vec| {
             let add_vec = a_vec + b_vec;
@@ -329,7 +337,7 @@ impl Backend<f32> for AVX2Backend {
     fn sub_scalar(a: &Tensor<f32>, b: f32) -> Tensor<f32> {
         let b_vec = f32x8::splat(b);
         let mut data = AVec::<f32>::with_capacity(CACHELINE_ALIGN, a.data.len());
-        let (_, a_aligned, a_suffix) = a.data.as_simd::<8>();
+        let (_, a_aligned, a_suffix) = a.data.as_simd::<{ Self::CHUNK_SIZE }>();
 
         a_aligned.iter().for_each(|a_vec| {
             let add_vec = a_vec - b_vec;
@@ -348,7 +356,7 @@ impl Backend<f32> for AVX2Backend {
     fn mul_scalar(a: &Tensor<f32>, b: f32) -> Tensor<f32> {
         let b_vec = f32x8::splat(b);
         let mut data = AVec::<f32>::with_capacity(CACHELINE_ALIGN, a.data.len());
-        let (_, a_aligned, a_suffix) = a.data.as_simd::<8>();
+        let (_, a_aligned, a_suffix) = a.data.as_simd::<{ Self::CHUNK_SIZE }>();
 
         a_aligned.iter().for_each(|a_vec| {
             let add_vec = a_vec * b_vec;
@@ -367,7 +375,7 @@ impl Backend<f32> for AVX2Backend {
     fn div_scalar(a: &Tensor<f32>, b: f32) -> Tensor<f32> {
         let b_vec = f32x8::splat(b);
         let mut data = AVec::<f32>::with_capacity(CACHELINE_ALIGN, a.data.len());
-        let (_, a_aligned, a_suffix) = a.data.as_simd::<8>();
+        let (_, a_aligned, a_suffix) = a.data.as_simd::<{ Self::CHUNK_SIZE }>();
 
         a_aligned.iter().for_each(|a_vec| {
             let add_vec = a_vec / b_vec;
@@ -385,18 +393,10 @@ impl Backend<f32> for AVX2Backend {
 
     fn add_elementwise(a: &Tensor<f32>, b: &Tensor<f32>) -> Tensor<f32> {
         assert!(a.shape() == b.shape(), "len of both tensors should match");
-        debug_assert!(
-            a.is_contiguous() && b.is_contiguous(),
-            "vector instructions are only supported for contiguous tensors"
-        );
-        debug_assert!(
-            a.data.alignment() == b.data.alignment(),
-            "data must be aligned"
-        );
 
         let mut data = AVec::<f32>::with_capacity(CACHELINE_ALIGN, a.data.len());
-        let (_, a_aligned, a_suffix) = a.data.as_simd::<8>();
-        let (_, b_aligned, b_suffix) = b.data.as_simd::<8>();
+        let (_, a_aligned, a_suffix) = a.data.as_simd::<{ Self::CHUNK_SIZE }>();
+        let (_, b_aligned, b_suffix) = b.data.as_simd::<{ Self::CHUNK_SIZE }>();
 
         a_aligned.iter().zip(b_aligned).for_each(|(a_vec, b_vec)| {
             let add_vec = a_vec + b_vec;
@@ -414,18 +414,10 @@ impl Backend<f32> for AVX2Backend {
 
     fn sub_elementwise(a: &Tensor<f32>, b: &Tensor<f32>) -> Tensor<f32> {
         assert!(a.shape() == b.shape(), "len of both tensors should match");
-        debug_assert!(
-            a.is_contiguous() && b.is_contiguous(),
-            "vector instructions are only supported for contiguous tensors"
-        );
-        debug_assert!(
-            a.data.alignment() == b.data.alignment(),
-            "data must be aligned"
-        );
 
         let mut data = AVec::<f32>::with_capacity(CACHELINE_ALIGN, a.data.len());
-        let (_, a_aligned, a_suffix) = a.data.as_simd::<8>();
-        let (_, b_aligned, b_suffix) = b.data.as_simd::<8>();
+        let (_, a_aligned, a_suffix) = a.data.as_simd::<{ Self::CHUNK_SIZE }>();
+        let (_, b_aligned, b_suffix) = b.data.as_simd::<{ Self::CHUNK_SIZE }>();
 
         a_aligned.iter().zip(b_aligned).for_each(|(a_vec, b_vec)| {
             let add_vec = a_vec - b_vec;
@@ -443,18 +435,10 @@ impl Backend<f32> for AVX2Backend {
 
     fn mul_elementwise(a: &Tensor<f32>, b: &Tensor<f32>) -> Tensor<f32> {
         assert!(a.shape() == b.shape(), "len of both tensors should match");
-        debug_assert!(
-            a.is_contiguous() && b.is_contiguous(),
-            "vector instructions are only supported for contiguous tensors"
-        );
-        debug_assert!(
-            a.data.alignment() == b.data.alignment(),
-            "data must be aligned"
-        );
 
         let mut data = AVec::<f32>::with_capacity(CACHELINE_ALIGN, a.data.len());
-        let (_, a_aligned, a_suffix) = a.data.as_simd::<8>();
-        let (_, b_aligned, b_suffix) = b.data.as_simd::<8>();
+        let (_, a_aligned, a_suffix) = a.data.as_simd::<{ Self::CHUNK_SIZE }>();
+        let (_, b_aligned, b_suffix) = b.data.as_simd::<{ Self::CHUNK_SIZE }>();
 
         a_aligned.iter().zip(b_aligned).for_each(|(a_vec, b_vec)| {
             let add_vec = a_vec * b_vec;
@@ -483,8 +467,8 @@ mod tests {
     }
 
     #[test]
-    fn test_relu() {
-        backend_tests::<AVX2Backend, f32>::test_relu();
+    fn test_exp() {
+        backend_tests::<AVX2Backend, f32>::test_exp();
     }
 
     #[test]
@@ -493,8 +477,13 @@ mod tests {
     }
 
     #[test]
-    fn test_exp() {
-        backend_tests::<AVX2Backend, f32>::test_exp();
+    fn test_relu() {
+        backend_tests::<AVX2Backend, f32>::test_relu();
+    }
+
+    #[test]
+    fn test_sqrt() {
+        backend_tests::<AVX2Backend, f32>::test_sqrt();
     }
 
     #[test]

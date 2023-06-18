@@ -8,11 +8,14 @@ pub trait Backend<T>
 where
     T: NumFloat,
 {
+    const CHUNK_SIZE: usize;
+
     fn matmul();
 
     fn exp(tensor: &Tensor<T>) -> Tensor<T>;
     fn log2(tensor: &Tensor<T>) -> Tensor<T>;
     fn relu(tensor: &Tensor<T>) -> Tensor<T>;
+    fn sqrt(tensor: &Tensor<T>) -> Tensor<T>;
     fn silu(tensor: &Tensor<T>) -> Tensor<T>;
     fn sigmoid(tensor: &Tensor<T>) -> Tensor<T>;
 

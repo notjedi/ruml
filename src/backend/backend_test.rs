@@ -25,53 +25,60 @@ where
         assert_eq!(out, ());
     }
 
-    pub fn test_relu() {
-        let vals_iter = (-5..5).map(|x| U::from(x).unwrap());
-        let a = Tensor::new(AVec::from_iter(CACHELINE_ALIGN, vals_iter));
-        let out = T::relu(&a);
-        assert_eq!(
-            out.ravel(),
-            AVec::from_iter(
-                CACHELINE_ALIGN,
-                [0, 0, 0, 0, 0, 0, 1, 2, 3, 4]
-                    .into_iter()
-                    .map(|x| U::from(x).unwrap())
-            )
-        );
-    }
-
-    pub fn test_log2() {
-        // BUG: doesn't work on the below input, cause the wide crate reports +inf instead of -inf for log2(0)
-        // let vals_iter = (1..10).map(|x| U::from(x).unwrap());
-        let vals_iter = (1..10).map(|x| U::from(x).unwrap());
-        let a = Tensor::new(AVec::from_iter(CACHELINE_ALIGN, vals_iter));
-        let out = T::log2(&a);
-        assert_eq!(
-            out.ravel(),
-            AVec::from_iter(
-                CACHELINE_ALIGN,
-                [0.0, 1.0, 1.5849625, 2.0, 2.32192809, 2.5849625, 2.80735492, 3.0, 3.169925]
-                    .into_iter()
-                    .map(|x| U::from(x).unwrap())
-            )
-        );
-    }
-
     pub fn test_exp() {
         let vals_iter = (0..10).map(|x| U::from(x).unwrap());
         let a = Tensor::new(AVec::from_iter(CACHELINE_ALIGN, vals_iter));
         let out = T::exp(&a);
         assert_eq!(
-            out.ravel(),
-            AVec::from_iter(
-                CACHELINE_ALIGN,
-                [
-                    1.0, 2.7182817, 7.389056, 20.085537, 54.598152, 148.41316, 403.4288, 1096.6332,
-                    2980.958, 8103.084
-                ]
+            out.ravel().as_slice(),
+            [
+                1.0, 2.7182817, 7.389056, 20.085537, 54.598152, 148.41316, 403.4288, 1096.6332,
+                2980.958, 8103.084
+            ]
+            .into_iter()
+            .map(|x| U::from(x).unwrap())
+            .collect::<Vec<U>>()
+        );
+    }
+
+    pub fn test_log2() {
+        // BUG: doesn't work on the below input, cause `wide` crate reports +inf instead of -inf for log2(0)
+        // let vals_iter = (0..10).map(|x| U::from(x).unwrap());
+        let vals_iter = (1..10).map(|x| U::from(x).unwrap());
+        let a = Tensor::new(AVec::from_iter(CACHELINE_ALIGN, vals_iter));
+        let out = T::log2(&a);
+        assert_eq!(
+            out.ravel().as_slice(),
+            [0.0, 1.0, 1.5849625, 2.0, 2.32192809, 2.5849625, 2.80735492, 3.0, 3.169925]
                 .into_iter()
                 .map(|x| U::from(x).unwrap())
-            )
+                .collect::<Vec<U>>()
+        );
+    }
+
+    pub fn test_relu() {
+        let vals_iter = (-5..5).map(|x| U::from(x).unwrap());
+        let a = Tensor::new(AVec::from_iter(CACHELINE_ALIGN, vals_iter));
+        let out = T::relu(&a);
+        assert_eq!(
+            out.ravel().as_slice(),
+            [0, 0, 0, 0, 0, 0, 1, 2, 3, 4]
+                .into_iter()
+                .map(|x| U::from(x).unwrap())
+                .collect::<Vec<U>>()
+        );
+    }
+
+    pub fn test_sqrt() {
+        let vals_iter = (0..5).map(|x| U::from(x).unwrap());
+        let a = Tensor::new(AVec::from_iter(CACHELINE_ALIGN, vals_iter));
+        let out = T::sqrt(&a);
+        assert_eq!(
+            out.ravel().as_slice(),
+            [0.0, 1.0, 1.4142135, 1.7320508, 2.0]
+                .into_iter()
+                .map(|x| U::from(x).unwrap())
+                .collect::<Vec<U>>()
         );
     }
 
@@ -80,16 +87,14 @@ where
         let a = Tensor::new(AVec::from_iter(CACHELINE_ALIGN, vals_iter));
         let out = T::silu(&a);
         assert_eq!(
-            out.ravel(),
-            AVec::from_iter(
-                CACHELINE_ALIGN,
-                [
-                    0.0, 0.7312012, 1.7617188, 2.8582764, 3.9282227, 4.967041, 5.9853516,
-                    6.9940186, 7.9973173, 8.99889
-                ]
-                .into_iter()
-                .map(|x| U::from(x).unwrap())
-            )
+            out.ravel().as_slice(),
+            [
+                0.0, 0.7312012, 1.7617188, 2.8582764, 3.9282227, 4.967041, 5.9853516, 6.9940186,
+                7.9973173, 8.99889
+            ]
+            .into_iter()
+            .map(|x| U::from(x).unwrap())
+            .collect::<Vec<U>>()
         );
     }
 
@@ -98,24 +103,22 @@ where
         let a = Tensor::new(AVec::from_iter(CACHELINE_ALIGN, vals_iter));
         let out = T::sigmoid(&a);
         assert_eq!(
-            out.ravel(),
-            AVec::from_iter(
-                CACHELINE_ALIGN,
-                [
-                    0.0066928864,
-                    0.017986298,
-                    0.047431946,
-                    0.11920166,
-                    0.2689209,
-                    0.49987793,
-                    0.7312012,
-                    0.8808594,
-                    0.95257413,
-                    0.98201376
-                ]
-                .into_iter()
-                .map(|x| U::from(x).unwrap())
-            )
+            out.ravel().as_slice(),
+            [
+                0.0066928864,
+                0.017986298,
+                0.047431946,
+                0.11920166,
+                0.2689209,
+                0.49987793,
+                0.7312012,
+                0.8808594,
+                0.95257413,
+                0.98201376
+            ]
+            .into_iter()
+            .map(|x| U::from(x).unwrap())
+            .collect::<Vec<U>>()
         );
     }
 
