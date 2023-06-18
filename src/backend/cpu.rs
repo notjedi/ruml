@@ -135,8 +135,8 @@ impl Backend<f32> for AVX2Backend {
             } else {
                 tensor.data.chunks_exact(last_dim_elems).for_each(|chunk| {
                     let mut sum = 0.0;
-                    chunk.chunks_exact(8).for_each(|oct_chunk| {
-                        let aligned = f32x8::from_slice(oct_chunk);
+                    chunk.array_chunks::<8>().for_each(|&oct_chunk| {
+                        let aligned = f32x8::from_array(oct_chunk);
                         sum += aligned.reduce_sum();
                     });
                     sum += chunk[(chunk.len() / 8) * 8..].iter().sum::<f32>();
@@ -155,12 +155,12 @@ impl Backend<f32> for AVX2Backend {
                 let (_, d_aligned, d_suffix) = data.as_simd_mut::<8>();
 
                 tensor.data.chunks_exact(stride).for_each(|row| {
-                    row.chunks_exact(8)
-                        .zip(d_aligned.iter_mut())
-                        .for_each(|(chunk, d_simd)| {
-                            let aligned = f32x8::from_slice(chunk);
+                    row.array_chunks::<8>().zip(d_aligned.iter_mut()).for_each(
+                        |(&chunk, d_simd)| {
+                            let aligned = f32x8::from_array(chunk);
                             *d_simd += aligned;
-                        });
+                        },
+                    );
 
                     row[(row.len() / 8) * 8..]
                         .iter()
@@ -195,12 +195,13 @@ impl Backend<f32> for AVX2Backend {
                             });
                         } else {
                             row.chunks_exact(row_stride).for_each(|chunk| {
-                                chunk.chunks_exact(8).zip(d_aligned.iter_mut()).for_each(
-                                    |(oct_chunk, d_simd)| {
-                                        let aligned = f32x8::from_slice(oct_chunk);
+                                chunk
+                                    .array_chunks::<8>()
+                                    .zip(d_aligned.iter_mut())
+                                    .for_each(|(&oct_chunk, d_simd)| {
+                                        let aligned = f32x8::from_array(oct_chunk);
                                         *d_simd += aligned;
-                                    },
-                                );
+                                    });
                                 chunk[chunk.len() - d_suffix.len()..]
                                     .iter()
                                     .zip(d_suffix.iter_mut())
@@ -231,12 +232,13 @@ impl Backend<f32> for AVX2Backend {
                         let (_, d_aligned, d_suffix) = acc.as_simd_mut::<8>();
 
                         row.chunks_exact(row_stride).for_each(|chunk| {
-                            chunk.chunks_exact(8).zip(d_aligned.iter_mut()).for_each(
-                                |(oct_chunk, d_simd)| {
-                                    let aligned = f32x8::from_slice(oct_chunk);
+                            chunk
+                                .array_chunks::<8>()
+                                .zip(d_aligned.iter_mut())
+                                .for_each(|(&oct_chunk, d_simd)| {
+                                    let aligned = f32x8::from_array(oct_chunk);
                                     *d_simd += aligned;
-                                },
-                            );
+                                });
                             chunk[chunk.len() - d_suffix.len()..]
                                 .iter()
                                 .zip(d_suffix.iter_mut())

@@ -1,4 +1,5 @@
 #![cfg_attr(not(feature = "std"), no_std)]
+#![feature(array_chunks)]
 #![feature(portable_simd)]
 #![feature(slice_as_chunks)]
 
