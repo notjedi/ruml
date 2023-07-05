@@ -1,4 +1,5 @@
 use aligned_vec::{avec, AVec};
+use rayon::prelude::{IntoParallelRefIterator, ParallelIterator};
 
 use super::Backend;
 use crate::{Shape, Tensor, CACHELINE_ALIGN};
@@ -18,6 +19,8 @@ impl Backend<f32> for AVX2Backend {
     const CHUNK_SIZE: usize = 8;
 
     fn matmul(a: &Tensor<f32>, b: &Tensor<f32>) -> Tensor<f32> {
+        // TODO: only supports 2d tensors as of now
+
         let a_row = a.shape()[0];
         let b_row = b.shape()[0];
         let a_col = a.shape()[1];
@@ -76,8 +79,8 @@ impl Backend<f32> for AVX2Backend {
 
     fn matmul_naive(a: &Tensor<f32>, b: &Tensor<f32>) -> Tensor<f32> {
         // TODO: only supports 2d tensors as of now
-        // TODO: assert various stuff
 
+        // NOTE: use rsplit to get the last x items?
         let a_row = a.shape()[0];
         let b_row = b.shape()[0];
         let a_col = a.shape()[1];
@@ -241,6 +244,14 @@ impl Backend<f32> for AVX2Backend {
         let acc = f32x8::splat(0.0);
         let acc = aligned.iter().fold(acc, f32x8::add);
         acc.reduce_sum() + suffix.iter().sum::<f32>()
+    }
+
+    fn sum_rayon(tensor: &Tensor<f32>) -> f32 {
+        debug_assert!(
+            tensor.is_contiguous(),
+            "vector instructions are only supported for contiguous tensors"
+        );
+        tensor.data.par_iter().sum::<f32>()
     }
 
     fn sum_axis(tensor: &Tensor<f32>, dim: usize) -> Tensor<f32> {

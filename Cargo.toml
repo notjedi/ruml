@@ -17,6 +17,7 @@ wide = { version = "0.7", default-features = false }
 num-traits = { version = "0.2", default-features = false }
 rand_distr = { version = "0.4", default-features = false }
 aligned-vec = { version = "0.5", default-features = false }
+rayon = "1.7.0"
 
 [dev-dependencies]
 criterion = { version = "0.5", features = ["html_reports"] }
@@ -27,4 +28,8 @@ std = []
 
 [[bench]]
 name = "matmul"
+harness = false
+
+[[bench]]
+name = "ops"
 harness = false

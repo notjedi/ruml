@@ -21,6 +21,7 @@ where
     fn sigmoid(tensor: &Tensor<T>) -> Tensor<T>;
 
     fn sum(tensor: &Tensor<T>) -> T;
+    fn sum_rayon(tensor: &Tensor<T>) -> T;
     fn sum_axis(tensor: &Tensor<T>, dim: usize) -> Tensor<T>;
 
     // TODO: use macros to impl these methods
