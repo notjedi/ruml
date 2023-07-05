@@ -1,19 +1,112 @@
 use aligned_vec::{avec, AVec};
 
 use super::Backend;
-use crate::{Tensor, CACHELINE_ALIGN};
+use crate::{Shape, Tensor, CACHELINE_ALIGN};
 use alloc::sync::Arc;
 use core::ops::Add;
 use core::simd::{f32x8, SimdFloat};
 use std::simd::StdFloat;
+
+const CACHE_LINE_F32: usize = 16;
 
 pub struct AVX2Backend;
 
 impl Backend<f32> for AVX2Backend {
     const CHUNK_SIZE: usize = 8;
 
-    fn matmul() {
-        todo!()
+    fn matmul(a: &Tensor<f32>, b: &Tensor<f32>) -> Tensor<f32> {
+        let a_row = a.shape()[0];
+        let b_row = b.shape()[0];
+        let a_col = a.shape()[1];
+        let b_col = b.shape()[1];
+        assert_eq!(a_col, b_row);
+
+        let new_shape = Shape::new(&[a_row, b_col]);
+        let mut data = AVec::<f32>::with_capacity(CACHELINE_ALIGN, new_shape.numel());
+        (0..new_shape.numel()).for_each(|_| data.push(0.0));
+
+        for i in 0..a_row {
+            let row = &a.data[i * a_col..i * a_col + a_col];
+            for j in (0..b_col).step_by(CACHE_LINE_F32) {
+                let mut buffer = [0.0 as f32; CACHE_LINE_F32];
+                let mut len = 16;
+
+                row.iter().enumerate().for_each(|(k, &elem)| {
+                    let elem_simd = f32x8::splat(elem);
+                    let col;
+
+                    if (k * b_col) + j + CACHE_LINE_F32 > b.data.len() {
+                        col = &b.data[(k * b_col) + j..];
+                        len = col.len();
+                    } else {
+                        col = &b.data[(k * b_col) + j..(k * b_col) + j + CACHE_LINE_F32];
+                    }
+
+                    if len == 16 {
+                        buffer
+                            .array_chunks_mut::<8>()
+                            .zip(col.array_chunks::<8>())
+                            .for_each(|(buf_mut, &col_chunk)| {
+                                let ans = (f32x8::from_array(col_chunk) * elem_simd).to_array();
+                                buf_mut
+                                    .iter_mut()
+                                    .zip(ans.iter())
+                                    .for_each(|(dst, &src)| *dst += src);
+                            });
+                    } else {
+                        buffer.chunks_mut(len).zip(col.chunks(len)).for_each(
+                            |(buf_mut, col_chunk)| {
+                                let ans = col_chunk.iter().map(|col_elem| col_elem * elem);
+                                buf_mut
+                                    .iter_mut()
+                                    .zip(ans)
+                                    .for_each(|(dst, src)| *dst += src);
+                            },
+                        );
+                    }
+                });
+
+                if len == 16 {
+                    data[(i * b_col) + j..(i * b_col) + j + CACHE_LINE_F32]
+                        .copy_from_slice(buffer.as_slice());
+                } else {
+                    data[(i * b_col) + j..(i * b_col) + j + len].copy_from_slice(&buffer[..len]);
+                }
+            }
+        }
+
+        Tensor {
+            data: Arc::new(data),
+            shape: new_shape,
+        }
+    }
+
+    fn matmul_naive(a: &Tensor<f32>, b: &Tensor<f32>) -> Tensor<f32> {
+        // TODO: only supports 2d tensors as of now
+        // TODO: assert various stuff
+
+        let a_row = a.shape()[0];
+        let b_row = b.shape()[0];
+        let a_col = a.shape()[1];
+        let b_col = b.shape()[1];
+        assert_eq!(a_col, b_row);
+
+        let new_shape = Shape::new(&[a_row, b_col]);
+        let mut data = AVec::<f32>::with_capacity(CACHELINE_ALIGN, new_shape.numel());
+        (0..new_shape.numel()).for_each(|_| data.push(0.0));
+
+        for i in 0..a_row {
+            for j in 0..b_col {
+                for k in 0..b_row {
+                    data[i * b_col + j] += a.data[i * a_col + k] * b.data[k * b_col + j];
+                }
+            }
+        }
+
+        Tensor {
+            data: Arc::new(data),
+            shape: new_shape,
+        }
     }
 
     fn exp(tensor: &Tensor<f32>) -> Tensor<f32> {
@@ -461,7 +554,6 @@ mod tests {
     use crate::backend::tests::tests as backend_tests;
 
     #[test]
-    #[ignore = "unimplemented"]
     fn test_matmul() {
         backend_tests::<AVX2Backend, f32>::test_matmul();
     }

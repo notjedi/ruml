@@ -1,6 +1,6 @@
 use core::marker::PhantomData;
 
-use crate::CACHELINE_ALIGN;
+use crate::{Shape, CACHELINE_ALIGN};
 use aligned_vec::AVec;
 
 use super::*;
@@ -21,8 +21,24 @@ where
     U: NumFloat,
 {
     pub fn test_matmul() {
-        let out = T::matmul();
-        assert_eq!(out, ());
+        let a_shape = Shape::new(&[18, 18]);
+        let b_shape = Shape::new(&[18, 18]);
+        let a = Tensor::<U>::arange(a_shape.numel()).reshape(a_shape.shape());
+        let b = Tensor::<U>::arange(b_shape.numel()).reshape(b_shape.shape());
+
+        let out = T::matmul(&a, &b);
+        // let out = T::matmul_naive(&a, &b);
+
+        assert_eq!(
+            out.ravel().as_slice(),
+            [
+                5, 6, 7, 8, 9, 15, 20, 25, 30, 35, 25, 34, 43, 52, 61, 35, 48, 61, 74, 87, 45, 62,
+                79, 96, 113
+            ]
+            .into_iter()
+            .map(|x| U::from(x).unwrap())
+            .collect::<Vec<U>>()
+        );
     }
 
     pub fn test_exp() {

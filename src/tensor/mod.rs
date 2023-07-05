@@ -163,6 +163,13 @@ impl<T: Num> Neg for &Tensor<T> {
     }
 }
 
+// TODO: MOVEMENT OPS
+// 1. PAD
+// 2. SHRINK
+
+// TODO: BINARY OPS
+// 1. support broadcast
+
 // TODO: impl<T: Num> std::ops::Add<&Tensor<T>> for &mut Tensor<T> {
 // TODO: impl<T: Num> std::ops::Add<Tensor<T>> for &mut Tensor<T> {
 // TODO: impl<T: Num> std::ops::Add<T> for &mut Tensor<T>
