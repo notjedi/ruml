@@ -1,5 +1,4 @@
 use core::marker::PhantomData;
-use std::collections::HashMap;
 
 use crate::{Shape, CACHELINE_ALIGN};
 use aligned_vec::AVec;
@@ -24,8 +23,6 @@ where
     pub fn test_matmul() {
         // let a_shape = Shape::new(&[35, 35]);
         // let b_shape = Shape::new(&[35, 35]);
-        // let a_shape = Shape::new(&[64, 64]);
-        // let b_shape = Shape::new(&[64, 64]);
         let a_shape = Shape::new(&[128, 128]);
         let b_shape = Shape::new(&[128, 128]);
         let a = Tensor::<U>::arange(a_shape.numel()).reshape(a_shape.shape());
@@ -74,10 +71,7 @@ where
 
                     })
                 }
-                // assert_eq!(naive, block, "rows don't match at index: {idx}");
             });
-
-        // assert_eq!(out_naive.ravel(), out.ravel());
         // assert_eq!(out_naive.ravel(), temp.ravel());
     }
 

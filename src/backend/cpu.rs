@@ -78,6 +78,11 @@ impl Backend<f32> for AVX2Backend {
     }
 
     fn matmul_block(a: &Tensor<f32>, b: &Tensor<f32>) -> Tensor<f32> {
+        // NOTE:
+        // torch is able to matmul two [2048, 2048] in 1.7 secs.
+        // our impl takes about 4 secs.
+        // we should at least get to 2 secs.
+        // TODO: find what's causing the bottleneck
         let a_row = a.shape()[0];
         let b_row = b.shape()[0];
         let a_col = a.shape()[1];
