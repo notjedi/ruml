@@ -77,6 +77,73 @@ impl Backend<f32> for AVX2Backend {
         }
     }
 
+    fn matmul_block(a: &Tensor<f32>, b: &Tensor<f32>) -> Tensor<f32> {
+        let a_row = a.shape()[0];
+        let b_row = b.shape()[0];
+        let a_col = a.shape()[1];
+        let b_col = b.shape()[1];
+        assert_eq!(a_col, b_row);
+
+        let new_shape = Shape::new(&[a_row, b_col]);
+        let mut data = AVec::<f32>::with_capacity(CACHELINE_ALIGN, new_shape.numel());
+        (0..new_shape.numel()).for_each(|_| data.push(0.0));
+
+        let row_rem = a_row % CACHE_LINE_F32;
+        let row_num_iters = a_row / CACHE_LINE_F32;
+        let i_final = row_num_iters * CACHE_LINE_F32;
+
+        // loop to split rows of a into 16x chunks
+        for i_outer in (0..row_num_iters).map(|x| x * CACHE_LINE_F32) {
+            let col_rem = b_col % CACHE_LINE_F32;
+            let col_num_iters = b_col / CACHE_LINE_F32;
+            let j_final = col_num_iters * CACHE_LINE_F32;
+
+            // loop to split cols of b into 16x chunks
+            for j_outer in (0..col_num_iters).map(|x| x * CACHE_LINE_F32) {
+                // loop thro each of the 16 rows
+                for i in i_outer..i_outer + CACHE_LINE_F32 {
+                    let row = &a.data[i * a_col..i * a_col + a_col];
+
+                    let line_rem = a_col % CACHE_LINE_F32;
+                    let line_num_iters = a_col / CACHE_LINE_F32;
+
+                    // loop 16x chunks of each row
+                    for line_i in (0..line_num_iters).map(|x| x * CACHE_LINE_F32) {
+                        let line = &row[line_i..line_i + CACHE_LINE_F32];
+                        let mut buffer = AlignedArray([0.0 as f32; CACHE_LINE_F32]);
+
+                        // loop thro each elem of 16x chunk of row
+                        line.iter().enumerate().for_each(|(k, &elem)| {
+                            let elem_simd = f32x8::splat(elem);
+                            let col = &b.data[((line_i + k) * b_col) + j_outer
+                                ..((line_i + k) * b_col) + j_outer + CACHE_LINE_F32];
+
+                            let (_, aligned, _) = buffer.0.as_simd_mut::<{ Self::CHUNK_SIZE }>();
+                            aligned
+                                .iter_mut()
+                                .zip(col.array_chunks::<{ Self::CHUNK_SIZE }>())
+                                .for_each(|(buf_mut, &col_chunk)| {
+                                    *buf_mut =
+                                        elem_simd.mul_add(f32x8::from_array(col_chunk), *buf_mut)
+                                });
+                        });
+                        data[(i * b_col) + j_outer..(i * b_col) + j_outer + CACHE_LINE_F32]
+                            .iter_mut()
+                            .zip(buffer.0.as_slice())
+                            .for_each(|(dst, &src)| *dst += src);
+                    }
+
+                    // TODO: take care of line_rem here
+                }
+            }
+        }
+
+        Tensor {
+            data: Arc::new(data),
+            shape: new_shape,
+        }
+    }
+
     fn matmul_naive(a: &Tensor<f32>, b: &Tensor<f32>) -> Tensor<f32> {
         // TODO: only supports 2d tensors as of now
 

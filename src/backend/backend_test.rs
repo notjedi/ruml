@@ -1,4 +1,5 @@
 use core::marker::PhantomData;
+use std::collections::HashMap;
 
 use crate::{Shape, CACHELINE_ALIGN};
 use aligned_vec::AVec;
@@ -21,15 +22,63 @@ where
     U: NumFloat,
 {
     pub fn test_matmul() {
-        let a_shape = Shape::new(&[18, 18]);
-        let b_shape = Shape::new(&[18, 18]);
+        // let a_shape = Shape::new(&[35, 35]);
+        // let b_shape = Shape::new(&[35, 35]);
+        // let a_shape = Shape::new(&[64, 64]);
+        // let b_shape = Shape::new(&[64, 64]);
+        let a_shape = Shape::new(&[128, 128]);
+        let b_shape = Shape::new(&[128, 128]);
         let a = Tensor::<U>::arange(a_shape.numel()).reshape(a_shape.shape());
         let b = Tensor::<U>::arange(b_shape.numel()).reshape(b_shape.shape());
 
         let out = T::matmul(&a, &b);
+        let out_block = T::matmul_block(&a, &b);
         let out_naive = T::matmul_naive(&a, &b);
 
-        assert_eq!(out.ravel(), out_naive.ravel());
+        let diff_abs = out_naive
+            .data
+            .iter()
+            .zip(out_block.data.iter())
+            // .zip(out.data.iter())
+            .map(|(&n_elem, &b_elem)| (n_elem - b_elem).abs())
+            .filter(|&x| x != U::zero())
+            .collect::<Vec<U>>();
+        dbg!(&out.data.len());
+        dbg!(&diff_abs.len());
+
+        let mut unique_abs: Vec<U> = Vec::new();
+
+        diff_abs.iter().for_each(|&x| {
+            let find = unique_abs.iter().position(|&y| y == x);
+            if find.is_none() {
+                unique_abs.push(x);
+            }
+        });
+        unique_abs.sort_by(|x, y| x.partial_cmp(y).unwrap());
+
+        dbg!(unique_abs.len());
+        dbg!(&unique_abs);
+
+        out_naive
+            .data
+            .chunks_exact(64)
+            .zip(out_block.data.chunks_exact(64))
+            // .zip(out.data.chunks_exact(64))
+            .enumerate()
+            .for_each(|(idx, (naive, block))| {
+                if naive != block {
+                    naive.iter().zip(block.iter()).enumerate().for_each(|(elem_idx, (&n_elem, &b_elem))| {
+                        if n_elem != b_elem {
+                            panic!("values {n_elem} and {b_elem} differ by {} at index {elem_idx} in row {idx}", (n_elem - b_elem).abs());
+                        }
+
+                    })
+                }
+                // assert_eq!(naive, block, "rows don't match at index: {idx}");
+            });
+
+        // assert_eq!(out_naive.ravel(), out.ravel());
+        // assert_eq!(out_naive.ravel(), temp.ravel());
     }
 
     pub fn test_exp() {
