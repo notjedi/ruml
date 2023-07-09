@@ -1,4 +1,7 @@
-use core::{fmt::Debug, ops::Neg};
+use core::{
+    fmt::{Debug, Display},
+    ops::Neg,
+};
 
 use num_traits::{Bounded, Float, NumAssignOps, NumCast, PrimInt, Signed};
 
@@ -14,6 +17,7 @@ pub trait Num:
     + Signed
     + Debug
     + Copy
+    + Display
 {
 }
 impl<T> Num for T where
@@ -26,6 +30,7 @@ impl<T> Num for T where
         + Signed
         + Debug
         + Copy
+        + Display
 {
 }
 

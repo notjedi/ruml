@@ -92,8 +92,8 @@ impl Backend<f32> for AVX2Backend {
         (0..new_shape.numel()).for_each(|_| data.push(0.0));
 
         for i in 0..a_row {
-            for j in 0..b_col {
-                for k in 0..b_row {
+            for k in 0..b_row {
+                for j in 0..b_col {
                     data[i * b_col + j] += a.data[i * a_col + k] * b.data[k * b_col + j];
                 }
             }
