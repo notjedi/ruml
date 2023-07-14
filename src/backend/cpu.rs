@@ -18,8 +18,59 @@ struct AlignedArray([f32; 16]);
 impl Backend<f32> for AVX2Backend {
     const CHUNK_SIZE: usize = 8;
 
+    // sy = 0, ey = N, BLOCK = 8, BLOCK_Y, BLOCK_X = 4
+    // for (int y = sy; y < ey; y += BLOCK_Y) {
+    //   for (int x = 0; x < N; x += BLOCK * BLOCK_X) {
+
+    //     __m256 acc[BLOCK_Y][BLOCK_X] = {};
+    //     for (int k = 0; k < N; k++) {
+    //       for (int iy = 0; iy < BLOCK_Y; iy++) {
+    //         __m256 ta = _mm256_broadcast_ss(&A[(y + iy) * N + k]);
+    //         for (int ix = 0; ix < BLOCK_X; ix++) {
+    //           acc[iy][ix] = _mm256_fmadd_ps(
+    //               ta, Bfm[((x + ix * BLOCK) * N + k * 8) / 8], acc[iy][ix]);
+    //         }
+    //       }
+    //     }
+
+    //     for (int iy = 0; iy < BLOCK_Y; iy++) {
+    //       for (int ix = 0; ix < BLOCK_X; ix++) {
+    //         Cm[((y + iy) * N + x + ix * BLOCK) / 8] = acc[iy][ix];
+    //       }
+    //     }
+    //   }
+    fn matmul_tinygrad(a: &Tensor<f32>, b: &Tensor<f32>) -> Tensor<f32> {
+        const BLOCK: usize = 8;
+        const BLOCK_X: usize = 4;
+        const BLOCK_Y: usize = 4;
+
+        todo!()
+    }
+
     fn matmul(a: &Tensor<f32>, b: &Tensor<f32>) -> Tensor<f32> {
         // TODO: only supports 2d tensors as of now
+
+        // NOTE:
+        // torch is able to matmul two [2048, 2048] in 0.11s / 110ms.
+        // our impl takes about 4s.
+        // we should at least get to 1s.
+        // TODO: find what's causing the bottleneck
+
+        // https://iq.opengenus.org/formula-for-flops-theoretical-max
+        // Theoretical Maximum FLOPS = Clock Speed x Number of Cores x SIMD factor x FMA factor x Instuctions per second
+        // theoretical flops (multi-thread) on my pc = 3.4 * 6 * 8 * 8 * 1 = 1305.6 GFLOPs
+        // theoretical flops (single-thread) on my pc = 3.4 * 1 * 8 * 8 * 1 = 217.6 GFLOPs
+        //
+        // 2 * N compute for each cell of matrix
+        // 2 * N * N * N compute for the whole matrix (N * N cells)
+        // for N = 2048, compute = 17179869184
+        // TODO: should i also include the compute for copying the values to simd registers to
+        // compute?
+        //
+        // my impl takes 4 secs = 17179869184 / 4 = 4294967296 = 17.179869184 GFLOPs
+        // torch impl takes 0.1 secs = 17179869184 / 0.1 = 171798691840 = 171.79869184 GFLOPs
+        // numpy imple takes 60 secs = 17179869184 / 60 = 286331153 = 0.286331153 GFLOPs
+        // theoretical we can do 2*N^3 compute in 0.079169904s = about 80ms
 
         let a_row = a.shape()[0];
         let b_row = b.shape()[0];
@@ -31,20 +82,21 @@ impl Backend<f32> for AVX2Backend {
         let mut data = AVec::<f32>::with_capacity(CACHELINE_ALIGN, new_shape.numel());
         (0..new_shape.numel()).for_each(|_| data.push(0.0));
 
+        let rem = b_col % CACHE_LINE_F32;
+        let num_iters = b_col / CACHE_LINE_F32;
+        let j_final = b_col - rem;
+
         for i in 0..a_row {
-            let rem = b_col % CACHE_LINE_F32;
-            let num_iters = b_col / CACHE_LINE_F32;
-            let j_final = num_iters * CACHE_LINE_F32;
             let row = &a.data[i * a_col..i * a_col + a_col];
 
             for j in (0..num_iters).map(|x| x * CACHE_LINE_F32) {
                 let mut buffer = AlignedArray([0.0 as f32; CACHE_LINE_F32]);
+                let (_, aligned, _) = buffer.0.as_simd_mut::<{ Self::CHUNK_SIZE }>();
 
                 row.iter().enumerate().for_each(|(k, &elem)| {
                     let elem_simd = f32x8::splat(elem);
                     let col = &b.data[(k * b_col) + j..(k * b_col) + j + CACHE_LINE_F32];
 
-                    let (_, aligned, _) = buffer.0.as_simd_mut::<{ Self::CHUNK_SIZE }>();
                     aligned.iter_mut().zip(col.array_chunks::<8>()).for_each(
                         |(buf_mut, &col_chunk)| {
                             *buf_mut = elem_simd.mul_add(f32x8::from_array(col_chunk), *buf_mut)
@@ -69,78 +121,6 @@ impl Backend<f32> for AVX2Backend {
                 .iter_mut()
                 .zip(&buffer[..rem])
                 .for_each(|(dst, &src)| *dst += src);
-        }
-
-        Tensor {
-            data: Arc::new(data),
-            shape: new_shape,
-        }
-    }
-
-    fn matmul_block(a: &Tensor<f32>, b: &Tensor<f32>) -> Tensor<f32> {
-        // NOTE:
-        // torch is able to matmul two [2048, 2048] in 1.7 secs.
-        // our impl takes about 4 secs.
-        // we should at least get to 2 secs.
-        // TODO: find what's causing the bottleneck
-        let a_row = a.shape()[0];
-        let b_row = b.shape()[0];
-        let a_col = a.shape()[1];
-        let b_col = b.shape()[1];
-        assert_eq!(a_col, b_row);
-
-        let new_shape = Shape::new(&[a_row, b_col]);
-        let mut data = AVec::<f32>::with_capacity(CACHELINE_ALIGN, new_shape.numel());
-        (0..new_shape.numel()).for_each(|_| data.push(0.0));
-
-        let row_rem = a_row % CACHE_LINE_F32;
-        let row_num_iters = a_row / CACHE_LINE_F32;
-        let i_final = row_num_iters * CACHE_LINE_F32;
-
-        // loop to split rows of a into 16x chunks
-        for i_outer in (0..row_num_iters).map(|x| x * CACHE_LINE_F32) {
-            let col_rem = b_col % CACHE_LINE_F32;
-            let col_num_iters = b_col / CACHE_LINE_F32;
-            let j_final = col_num_iters * CACHE_LINE_F32;
-
-            // loop to split cols of b into 16x chunks
-            for j_outer in (0..col_num_iters).map(|x| x * CACHE_LINE_F32) {
-                // loop thro each of the 16 rows
-                for i in i_outer..i_outer + CACHE_LINE_F32 {
-                    let row = &a.data[i * a_col..i * a_col + a_col];
-
-                    let line_rem = a_col % CACHE_LINE_F32;
-                    let line_num_iters = a_col / CACHE_LINE_F32;
-
-                    // loop 16x chunks of each row
-                    for line_i in (0..line_num_iters).map(|x| x * CACHE_LINE_F32) {
-                        let line = &row[line_i..line_i + CACHE_LINE_F32];
-                        let mut buffer = AlignedArray([0.0 as f32; CACHE_LINE_F32]);
-
-                        // loop thro each elem of 16x chunk of row
-                        line.iter().enumerate().for_each(|(k, &elem)| {
-                            let elem_simd = f32x8::splat(elem);
-                            let col = &b.data[((line_i + k) * b_col) + j_outer
-                                ..((line_i + k) * b_col) + j_outer + CACHE_LINE_F32];
-
-                            let (_, aligned, _) = buffer.0.as_simd_mut::<{ Self::CHUNK_SIZE }>();
-                            aligned
-                                .iter_mut()
-                                .zip(col.array_chunks::<{ Self::CHUNK_SIZE }>())
-                                .for_each(|(buf_mut, &col_chunk)| {
-                                    *buf_mut =
-                                        elem_simd.mul_add(f32x8::from_array(col_chunk), *buf_mut)
-                                });
-                        });
-                        data[(i * b_col) + j_outer..(i * b_col) + j_outer + CACHE_LINE_F32]
-                            .iter_mut()
-                            .zip(buffer.0.as_slice())
-                            .for_each(|(dst, &src)| *dst += src);
-                    }
-
-                    // TODO: take care of line_rem here
-                }
-            }
         }
 
         Tensor {

@@ -10,10 +10,6 @@ fn bench(c: &mut Criterion) {
     c.bench_function("matmul", |b| {
         b.iter(|| AVX2Backend::matmul(black_box(&x), black_box(&y)))
     });
-
-    c.bench_function("matmul_block", |b| {
-        b.iter(|| AVX2Backend::matmul_block(black_box(&x), black_box(&y)))
-    });
 }
 
 // https://medium.com/@yamafaktory/rust-benchmarking-with-criterion-on-travis-ci-%EF%B8%8F-8b54d321e05

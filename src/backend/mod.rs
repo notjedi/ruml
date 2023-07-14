@@ -11,8 +11,8 @@ where
     const CHUNK_SIZE: usize;
 
     fn matmul(a: &Tensor<T>, b: &Tensor<T>) -> Tensor<T>;
-    fn matmul_block(a: &Tensor<T>, b: &Tensor<T>) -> Tensor<T>;
     fn matmul_naive(a: &Tensor<T>, b: &Tensor<T>) -> Tensor<T>;
+    fn matmul_tinygrad(a: &Tensor<T>, b: &Tensor<T>) -> Tensor<T>;
 
     fn exp(tensor: &Tensor<T>) -> Tensor<T>;
     fn log2(tensor: &Tensor<T>) -> Tensor<T>;
