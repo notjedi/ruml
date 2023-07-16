@@ -21,14 +21,15 @@ where
     U: NumFloat,
 {
     pub fn test_matmul() {
-        let a_shape = Shape::new(&[32, 32]);
-        let b_shape = Shape::new(&[32, 32]);
+        let a_shape = Shape::new(&[35, 35]);
+        let b_shape = Shape::new(&[35, 35]);
+
         let a = Tensor::<U>::arange(a_shape.numel()).reshape(a_shape.shape());
         let b = Tensor::<U>::arange(b_shape.numel()).reshape(b_shape.shape());
 
         let out = T::matmul(&a, &b);
         let out_naive = T::matmul_naive(&a, &b);
-        assert_eq!(out_naive.ravel(), out.ravel());
+        // assert_eq!(out_naive.ravel(), out.ravel());
 
         // DEBUG stuff
         let diff_abs = out_naive
@@ -52,6 +53,24 @@ where
         dbg!(&diff_abs.len());
         dbg!(unique_abs.len());
         dbg!(&unique_abs);
+
+        out_naive
+            .data
+            .chunks_exact(64)
+            .zip(out.data.chunks_exact(64))
+            // .zip(out.data.chunks_exact(64))
+            .enumerate()
+            .for_each(|(idx, (naive, block))| {
+                if naive != block {
+                    naive.iter().zip(block.iter()).enumerate().for_each(|(elem_idx, (&n_elem, &b_elem))| {
+                        if n_elem != b_elem {
+                            panic!("values {n_elem} and {b_elem} differ by {} at index {elem_idx} in row {idx}", (n_elem - b_elem).abs());
+                        }
+
+                    })
+                }
+                // assert_eq!(naive, block, "rows don't match at index: {idx}");
+            });
     }
 
     pub fn test_exp() {
