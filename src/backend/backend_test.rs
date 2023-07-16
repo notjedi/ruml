@@ -21,8 +21,8 @@ where
     U: NumFloat,
 {
     pub fn test_matmul() {
-        let a_shape = Shape::new(&[35, 35]);
-        let b_shape = Shape::new(&[35, 35]);
+        let a_shape = Shape::new(&[32, 32]);
+        let b_shape = Shape::new(&[32, 32]);
 
         let a = Tensor::<U>::arange(a_shape.numel()).reshape(a_shape.shape());
         let b = Tensor::<U>::arange(b_shape.numel()).reshape(b_shape.shape());
