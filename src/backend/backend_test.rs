@@ -29,7 +29,6 @@ where
 
         let out = T::matmul(&a, &b);
         let out_naive = T::matmul_naive(&a, &b);
-        // assert_eq!(out_naive.ravel(), out.ravel());
 
         // DEBUG stuff
         let diff_abs = out_naive

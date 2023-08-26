@@ -8,11 +8,13 @@ use alloc::vec::Vec;
 
 use crate::{assert_dim, assert_numel};
 
+const MAX_DIM: usize = 4;
+
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct Shape {
     // TODO: no heap allocs, use array of size 4;
-    pub(crate) shape: [usize; 4],
-    pub(crate) strides: [usize; 4],
+    pub(crate) shape: [usize; MAX_DIM],
+    pub(crate) strides: [usize; MAX_DIM],
     pub(crate) ndim: usize,
     pub(crate) offset: usize,
 }
@@ -25,8 +27,8 @@ impl Shape {
         // Right now, we only support row major stride by default
         assert!(!shape.is_empty(), "shape should not be an empty vec");
         assert!(
-            shape.len() <= 4,
-            "shape of len > 4 is not supported as of now"
+            shape.len() <= MAX_DIM,
+            "shape of len > {MAX_DIM} is not supported as of now"
         );
         assert!(
             !shape.iter().any(|&x| x == 0),
@@ -35,7 +37,7 @@ impl Shape {
         );
 
         let strides = Self::get_strides_for_shape(shape);
-        let mut shape_arr = [0; 4];
+        let mut shape_arr = [0; MAX_DIM];
         shape_arr
             .iter_mut()
             .zip(shape.iter())
@@ -50,8 +52,8 @@ impl Shape {
     }
 
     #[inline]
-    pub(crate) fn get_strides_for_shape(shape: &[usize]) -> [usize; 4] {
-        let mut strides = [1; 4];
+    pub(crate) fn get_strides_for_shape(shape: &[usize]) -> [usize; MAX_DIM] {
+        let mut strides = [1; MAX_DIM];
         let mut cum_prod = 1;
         let ndim = shape.len();
 
@@ -147,26 +149,6 @@ impl Shape {
         strides[dim..].rotate_left(1);
         strides[3] = 0;
 
-        // let mut shape = [0; 4];
-        // shape
-        //     .iter_mut()
-        //     .zip(self.shape[..dim].iter())
-        //     .for_each(|(dst, &src)| *dst = src);
-        // shape[dim..]
-        //     .iter_mut()
-        //     .zip(self.shape[dim + 1..].iter())
-        //     .for_each(|(dst, &src)| *dst = src);
-
-        // let mut strides = [0; 4];
-        // strides
-        //     .iter_mut()
-        //     .zip(self.strides[..dim].iter())
-        //     .for_each(|(dst, &src)| *dst = src);
-        // strides[dim..]
-        //     .iter_mut()
-        //     .zip(self.strides[dim + 1..].iter())
-        //     .for_each(|(dst, &src)| *dst = src);
-
         Shape {
             shape,
             strides,
@@ -193,8 +175,8 @@ impl Shape {
     }
 
     pub(crate) fn squeeze(&self) -> Self {
-        let mut shape = [0; 4];
-        let mut strides = [0; 4];
+        let mut shape = [0; MAX_DIM];
+        let mut strides = [0; MAX_DIM];
         let mut ndim = 0;
 
         self.shape()
@@ -234,8 +216,8 @@ impl Shape {
         // see https://github.com/numpy/numpy/blob/ac3baf5e229a502b43042c570d4d79e92702669a/numpy/core/src/multiarray/shape.c#L371
         assert_numel!(self.numel(), new_shape.iter().product(), new_shape);
         assert!(
-            new_shape.len() <= 4,
-            "len of new_shape({}) should be less than or equal to 4",
+            new_shape.len() <= MAX_DIM,
+            "len of new_shape({}) should be less than or equal to {MAX_DIM}",
             new_shape.len()
         );
 
@@ -305,13 +287,13 @@ impl Shape {
         new_strides.iter_mut().skip(new_start).for_each(|x| {
             *x = last_stride;
         });
-        let mut new_shape_arr = [0; 4];
+        let mut new_shape_arr = [0; MAX_DIM];
         new_shape_arr
             .iter_mut()
             .zip(new_shape.iter())
             .for_each(|(dst, &src)| *dst = src);
 
-        let mut new_strides_arr = [0; 4];
+        let mut new_strides_arr = [0; MAX_DIM];
         new_strides_arr
             .iter_mut()
             .zip(new_strides.iter())
@@ -331,8 +313,8 @@ impl Shape {
             dims.len(),
             "ndims should be equal for both from shape and to shape"
         );
-        let mut shape = [0; 4];
-        let mut strides = [0; 4];
+        let mut shape = [0; MAX_DIM];
+        let mut strides = [0; MAX_DIM];
         (0..self.ndim).for_each(|i| {
             if self.shape[i] == dims[i] {
                 shape[i] = self.shape[i];
@@ -384,8 +366,8 @@ impl Shape {
         //     "All dimensions should be less than {}",
         //     self.ndim
         // );
-        let mut shape = [0; 4];
-        let mut strides = [0; 4];
+        let mut shape = [0; MAX_DIM];
+        let mut strides = [0; MAX_DIM];
         perm_shape.iter().enumerate().for_each(|(i, &from)| {
             shape[i] = self.shape[from];
             strides[i] = self.strides[from];
@@ -400,7 +382,7 @@ impl Shape {
 
     pub(crate) fn transpose(&self, dim1: usize, dim2: usize) -> Self {
         assert_dim!(dim1, dim2, self.ndim);
-        let mut new_dims = [0; 4];
+        let mut new_dims = [0; MAX_DIM];
         new_dims
             .iter_mut()
             .enumerate()

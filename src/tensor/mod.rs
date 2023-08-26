@@ -175,6 +175,8 @@ impl<T: Num> Neg for &Tensor<T> {
 // TODO: impl<T: Num> std::ops::Add<T> for &mut Tensor<T>
 // TODO: get around to implement mut iter for tensor
 
+// TODO: write more tests to make sure stack allocated shapes work as intended
+
 // we only support channel last memory format see
 // https://pytorch.org/blog/tensor-memory-format-matters for details
 // https://ajcr.net/stride-guide-part-1

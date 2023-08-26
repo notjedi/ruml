@@ -18,35 +18,6 @@ struct AlignedArray<const N: usize>([f32; N]);
 impl Backend<f32> for AVX2Backend {
     const CHUNK_SIZE: usize = 8;
 
-    // sy = 0, ey = N, BLOCK = 8, BLOCK_Y, BLOCK_X = 4
-    // for (int y = sy; y < ey; y += BLOCK_Y) {
-    //   for (int x = 0; x < N; x += BLOCK * BLOCK_X) {
-
-    //     __m256 acc[BLOCK_Y][BLOCK_X] = {};
-    //     for (int k = 0; k < N; k++) {
-    //       for (int iy = 0; iy < BLOCK_Y; iy++) {
-    //         __m256 ta = _mm256_broadcast_ss(&A[(y + iy) * N + k]);
-    //         for (int ix = 0; ix < BLOCK_X; ix++) {
-    //           acc[iy][ix] = _mm256_fmadd_ps(
-    //               ta, Bfm[((x + ix * BLOCK) * N + k * 8) / 8], acc[iy][ix]);
-    //         }
-    //       }
-    //     }
-
-    //     for (int iy = 0; iy < BLOCK_Y; iy++) {
-    //       for (int ix = 0; ix < BLOCK_X; ix++) {
-    //         Cm[((y + iy) * N + x + ix * BLOCK) / 8] = acc[iy][ix];
-    //       }
-    //     }
-    //   }
-    fn matmul_tinygrad(a: &Tensor<f32>, b: &Tensor<f32>) -> Tensor<f32> {
-        const BLOCK: usize = 8;
-        const BLOCK_X: usize = 4;
-        const BLOCK_Y: usize = 4;
-
-        todo!()
-    }
-
     fn matmul(a: &Tensor<f32>, b: &Tensor<f32>) -> Tensor<f32> {
         // TODO: only supports 2d tensors as of now
 
@@ -219,7 +190,6 @@ impl Backend<f32> for AVX2Backend {
 
     fn matmul_naive(a: &Tensor<f32>, b: &Tensor<f32>) -> Tensor<f32> {
         // TODO: only supports 2d tensors as of now
-
         // NOTE: use rsplit to get the last x items?
         let a_row = a.shape()[0];
         let b_row = b.shape()[0];
