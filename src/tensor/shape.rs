@@ -10,8 +10,10 @@ use crate::{assert_dim, assert_numel};
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct Shape {
-    pub(crate) shape: Vec<usize>,
-    pub(crate) strides: Vec<usize>,
+    // TODO: no heap allocs, use array of size 4;
+    pub(crate) shape: [usize; 4],
+    pub(crate) strides: [usize; 4],
+    pub(crate) ndim: usize,
     pub(crate) offset: usize,
 }
 
@@ -32,9 +34,28 @@ impl Shape {
             shape
         );
 
-        let mut strides = vec![1; shape.len()];
+        let strides = Self::get_strides_for_shape(shape);
+        let mut shape_arr = [0; 4];
+        shape_arr
+            .iter_mut()
+            .zip(shape.iter())
+            .for_each(|(dst, &src)| *dst = src);
+
+        Shape {
+            shape: shape_arr,
+            strides,
+            ndim: shape.len(),
+            offset: 0,
+        }
+    }
+
+    #[inline]
+    pub(crate) fn get_strides_for_shape(shape: &[usize]) -> [usize; 4] {
+        let mut strides = [1; 4];
         let mut cum_prod = 1;
-        strides
+        let ndim = shape.len();
+
+        strides[..ndim]
             .iter_mut()
             .rev()
             .zip(shape.iter().rev())
@@ -42,59 +63,68 @@ impl Shape {
                 *st = cum_prod;
                 cum_prod *= sh;
             });
-        Shape {
-            shape: shape.to_vec(),
-            strides,
-            offset: 0,
-        }
+        strides[shape.len()..].iter_mut().for_each(|x| *x = 0);
+        strides
+    }
+
+    #[inline]
+    pub fn full(shape: &[usize]) -> Self {
+        let mut shape = Self::new(shape);
+        shape.strides = [0, 0, 0, 0];
+        shape
     }
 
     #[inline]
     pub(crate) fn from_len(len: usize) -> Self {
         Shape {
-            shape: [len].into(),
-            strides: [1].into(),
+            shape: [len, 0, 0, 0],
+            strides: [1, 0, 0, 0],
+            ndim: 1,
             offset: 0,
         }
     }
 
     #[inline]
     pub fn shape(&self) -> &[usize] {
-        &self.shape
+        &self.shape[..self.ndim]
     }
 
     #[inline]
     pub fn strides(&self) -> &[usize] {
-        &self.strides
-    }
-
-    #[inline]
-    pub fn ndim(&self) -> usize {
-        self.shape.len()
+        &self.strides[..self.ndim]
     }
 
     #[inline]
     pub fn numel(&self) -> usize {
-        self.shape.iter().product()
+        // TODO: make sure shape does not have 0's
+        self.shape().iter().product()
     }
 
     #[inline]
     pub fn is_contiguous(&self) -> bool {
-        self.strides() == Shape::new(&self.shape).strides()
+        self.strides() == Shape::new(&self.shape()).strides()
     }
 
     #[inline]
     pub fn is_valid_index(&self, index: &[usize]) -> bool {
         !index.is_empty()
-            && index.len() <= self.shape.len()
-            && index.iter().zip(self.shape.iter()).all(|(i, s)| i < s)
+            && index.len() <= self.ndim
+            && index.iter().zip(self.shape().iter()).all(|(i, s)| i < s)
     }
 
     pub fn get_buffer_idx(&self, index: &[usize]) -> usize {
+        // TODO
+        assert_eq!(
+            index.len(),
+            self.ndim,
+            "len of index({}) should be equal to {}",
+            index.len(),
+            self.ndim,
+        );
         self.offset
             + index
                 .iter()
-                .zip(self.strides.iter())
+                .zip(self.strides().iter())
                 .map(|(&idx, &stride)| idx * stride)
                 .sum::<usize>()
     }
@@ -107,11 +137,42 @@ impl Shape {
     // the shape [x, y, z]. This method turns the shape [x, y, z] => [x, z] with appropriate strides.
     #[inline]
     pub(crate) fn remove_dim(&self, dim: usize) -> Self {
-        assert_dim!(dim, self.ndim());
-        let mut shape = self.clone();
-        shape.shape.remove(dim);
-        shape.strides.remove(dim);
-        shape
+        assert_dim!(dim, self.ndim);
+
+        let mut shape = self.shape.clone();
+        shape[dim..].rotate_left(1);
+        shape[3] = 0;
+
+        let mut strides = self.strides.clone();
+        strides[dim..].rotate_left(1);
+        strides[3] = 0;
+
+        // let mut shape = [0; 4];
+        // shape
+        //     .iter_mut()
+        //     .zip(self.shape[..dim].iter())
+        //     .for_each(|(dst, &src)| *dst = src);
+        // shape[dim..]
+        //     .iter_mut()
+        //     .zip(self.shape[dim + 1..].iter())
+        //     .for_each(|(dst, &src)| *dst = src);
+
+        // let mut strides = [0; 4];
+        // strides
+        //     .iter_mut()
+        //     .zip(self.strides[..dim].iter())
+        //     .for_each(|(dst, &src)| *dst = src);
+        // strides[dim..]
+        //     .iter_mut()
+        //     .zip(self.strides[dim + 1..].iter())
+        //     .for_each(|(dst, &src)| *dst = src);
+
+        Shape {
+            shape,
+            strides,
+            ndim: self.ndim - 1,
+            offset: self.offset,
+        }
     }
 
     // Reduces the given dimension to 1. For eg, let's say we want reduce the dimension 0 from the
@@ -119,11 +180,11 @@ impl Shape {
     // strides.
     #[inline]
     pub(crate) fn reduce_dim(&self, dim: usize) -> (Self, Self) {
-        assert_dim!(dim, self.ndim());
+        assert_dim!(dim, self.ndim);
         let mut reduced_shape = self.shape.clone();
         reduced_shape[dim] = 1;
 
-        let mut reduced_shape = Shape::new(&reduced_shape);
+        let mut reduced_shape = Shape::new(&reduced_shape[..self.ndim]);
         reduced_shape.strides[dim] = 1;
 
         let mut stride_shape = reduced_shape.clone();
@@ -132,27 +193,34 @@ impl Shape {
     }
 
     pub(crate) fn squeeze(&self) -> Self {
-        let mut shape = Vec::with_capacity(self.ndim());
-        let mut strides = Vec::with_capacity(self.ndim());
-        self.shape
+        let mut shape = [0; 4];
+        let mut strides = [0; 4];
+        let mut ndim = 0;
+
+        self.shape()
             .iter()
-            .zip(self.strides.iter())
+            .zip(self.strides().iter())
             .for_each(|(&dim, &stride)| {
+                // TODO: should i also check if dim != 0
                 if dim != 1 {
-                    shape.push(dim);
-                    strides.push(stride);
+                    shape[ndim] = dim;
+                    strides[ndim] = stride;
+                    ndim += 1;
                 }
             });
-        if shape.is_empty() {
+
+        if ndim == 0 {
             return Self {
-                shape: vec![1],
-                strides: vec![1],
+                shape: [1, 0, 0, 0],
+                strides: [1, 0, 0, 0],
+                ndim: 1,
                 offset: 0,
             };
         }
         Self {
             shape,
             strides,
+            ndim,
             offset: self.offset,
         }
     }
@@ -161,15 +229,21 @@ impl Shape {
         &self,
         new_shape: &[usize],
     ) -> Result<Self, String> {
+        // TODO: convert fn to array API
         // function to check if tensor can be reshaped without copying
         // see https://github.com/numpy/numpy/blob/ac3baf5e229a502b43042c570d4d79e92702669a/numpy/core/src/multiarray/shape.c#L371
         assert_numel!(self.numel(), new_shape.iter().product(), new_shape);
+        assert!(
+            new_shape.len() <= 4,
+            "len of new_shape({}) should be less than or equal to 4",
+            new_shape.len()
+        );
 
         // squeeze the current shape, cause axes with dim 1 won't have any effect on the final
         // shape and strides and only adds to complexity.
         let self_squeezed = self.squeeze();
 
-        let old_ndim = self_squeezed.ndim();
+        let old_ndim = self_squeezed.ndim;
         let old_shape = self_squeezed.shape;
         let old_strides = self_squeezed.strides;
 
@@ -231,29 +305,41 @@ impl Shape {
         new_strides.iter_mut().skip(new_start).for_each(|x| {
             *x = last_stride;
         });
+        let mut new_shape_arr = [0; 4];
+        new_shape_arr
+            .iter_mut()
+            .zip(new_shape.iter())
+            .for_each(|(dst, &src)| *dst = src);
+
+        let mut new_strides_arr = [0; 4];
+        new_strides_arr
+            .iter_mut()
+            .zip(new_strides.iter())
+            .for_each(|(dst, &src)| *dst = src);
 
         Ok(Shape {
-            shape: new_shape,
-            strides: new_strides,
+            shape: new_shape_arr,
+            strides: new_strides_arr,
+            ndim: new_shape.len(),
             offset: self.offset,
         })
     }
 
     pub(crate) fn expand_to(&self, dims: &[usize]) -> Self {
         assert_eq!(
-            self.ndim(),
+            self.ndim,
             dims.len(),
             "ndims should be equal for both from shape and to shape"
         );
-        let mut shape = Vec::with_capacity(self.ndim());
-        let mut strides = Vec::with_capacity(self.ndim());
-        (0..self.ndim()).for_each(|i| {
+        let mut shape = [0; 4];
+        let mut strides = [0; 4];
+        (0..self.ndim).for_each(|i| {
             if self.shape[i] == dims[i] {
-                shape.push(dims[i]);
-                strides.push(self.strides[i]);
+                shape[i] = self.shape[i];
+                strides[i] = self.strides[i];
             } else if self.shape[i] == 1 {
-                shape.push(dims[i]);
-                strides.push(0);
+                shape[i] = dims[i];
+                strides[i] = 0;
             } else {
                 panic!(
                     "cannot expand shape from {:?} to {:?} at dim {}",
@@ -264,12 +350,13 @@ impl Shape {
         Shape {
             shape,
             strides,
+            ndim: self.ndim,
             offset: self.offset,
         }
     }
 
     pub(crate) fn expand(&self, dim: usize, to: usize) -> Self {
-        assert_dim!(dim, self.ndim());
+        assert_dim!(dim, self.ndim);
         assert!(
             self.shape[dim] == 1,
             "cannot expand shape {:?} at dim {}.",
@@ -290,27 +377,34 @@ impl Shape {
             perm_shape.iter().sum(),
             "all dims must be specified exactly once"
         );
-        assert!(
-            !perm_shape.iter().any(|&x| x >= self.ndim()),
-            "All dimensions should be less than {}",
-            self.ndim()
-        );
-        let mut shape = Vec::with_capacity(self.ndim());
-        let mut strides = Vec::with_capacity(self.ndim());
-        perm_shape.iter().for_each(|&i| {
-            shape.push(self.shape[i]);
-            strides.push(self.strides[i]);
+        // TODO: do we need this check? isn't it redundant as we are already checking for numels in
+        // the above assert
+        // assert!(
+        //     !perm_shape.iter().any(|&x| x >= self.ndim),
+        //     "All dimensions should be less than {}",
+        //     self.ndim
+        // );
+        let mut shape = [0; 4];
+        let mut strides = [0; 4];
+        perm_shape.iter().enumerate().for_each(|(i, &from)| {
+            shape[i] = self.shape[from];
+            strides[i] = self.strides[from];
         });
         Self {
             shape,
             strides,
+            ndim: self.ndim,
             offset: self.offset,
         }
     }
 
     pub(crate) fn transpose(&self, dim1: usize, dim2: usize) -> Self {
-        assert_dim!(dim1, dim2, self.ndim());
-        let mut new_dims = (0..self.ndim()).collect::<Vec<usize>>();
+        assert_dim!(dim1, dim2, self.ndim);
+        let mut new_dims = [0; 4];
+        new_dims
+            .iter_mut()
+            .enumerate()
+            .for_each(|(i, dst)| *dst = i);
         new_dims.swap(dim1, dim2);
         self.permute(&new_dims)
     }
@@ -325,7 +419,7 @@ pub struct TensorIndexIterator<'a> {
 
 impl<'a> TensorIndexIterator<'a> {
     pub fn new(shape: &'a Shape) -> Self {
-        let index = vec![0; shape.ndim()];
+        let index = vec![0; shape.ndim];
         let exhausted = !shape.is_valid_index(&index);
         Self {
             shape,
@@ -344,7 +438,7 @@ impl<'a> Iterator for TensorIndexIterator<'a> {
         }
 
         let result = self.index.clone();
-        for dim in (0..self.shape.ndim()).rev() {
+        for dim in (0..self.shape.ndim).rev() {
             self.index[dim] += 1;
             if self.index[dim] < self.shape.shape[dim] {
                 break;

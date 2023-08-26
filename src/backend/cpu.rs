@@ -403,9 +403,9 @@ impl Backend<f32> for AVX2Backend {
             "vector instructions are only supported for contiguous tensors"
         );
         assert!(
-            dim < tensor.shape.ndim(),
+            dim < tensor.shape.ndim,
             "dim must be less than {}",
-            tensor.shape.ndim()
+            tensor.shape.ndim
         );
         let stride = tensor.shape.strides[0];
         let row_stride = tensor.shape.strides[dim];

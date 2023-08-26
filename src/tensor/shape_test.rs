@@ -5,7 +5,7 @@ fn test_shape() {
     let shape_vec = vec![3, 2, 5, 1];
     let shape: Shape = shape_vec.clone().into();
 
-    assert_eq!(shape.ndim(), 4);
+    assert_eq!(shape.ndim, 4);
     assert_eq!(shape.shape(), &shape_vec);
     assert_eq!(shape.strides(), &[10, 5, 1, 1]);
     assert_eq!(shape.numel(), shape_vec.iter().product());
@@ -40,44 +40,49 @@ fn test_shape_ops() {
 fn test_attempt_reshape_without_copying() {
     // normal shape = contiguous
     let shape = Shape {
-        shape: vec![4, 3, 2],
-        strides: vec![6, 2, 1],
+        shape: [4, 3, 2, 0],
+        strides: [6, 2, 1, 0],
+        ndim: 3,
         offset: 0,
     };
     let attempt_reshape = shape.attempt_reshape_without_copying(&[4, 1, 3, 2]);
-    assert_eq!(attempt_reshape.unwrap().strides, &[6, 6, 2, 1]);
+    assert_eq!(attempt_reshape.unwrap().strides(), &[6, 6, 2, 1]);
 
     // normal shape = contiguous
     let shape = Shape {
-        shape: vec![3, 27],
-        strides: vec![27, 1],
+        shape: [3, 27, 0, 0],
+        strides: [27, 1, 0, 0],
+        ndim: 2,
         offset: 0,
     };
     let attempt_reshape = shape.attempt_reshape_without_copying(&[3, 3, 3, 3]);
-    assert_eq!(attempt_reshape.unwrap().strides, &[27, 9, 3, 1]);
+    assert_eq!(attempt_reshape.unwrap().strides(), &[27, 9, 3, 1]);
 
     // normal shape = contiguous, with trailing 1's in new_shape
     let shape = Shape {
-        shape: vec![3, 27],
-        strides: vec![27, 1],
+        shape: [3, 9, 0, 0],
+        strides: [9, 1, 0, 0],
+        ndim: 2,
         offset: 0,
     };
-    let attempt_reshape = shape.attempt_reshape_without_copying(&[3, 3, 3, 3, 1]);
-    assert_eq!(attempt_reshape.unwrap().strides, &[27, 9, 3, 1, 1]);
+    let attempt_reshape = shape.attempt_reshape_without_copying(&[3, 3, 3, 1]);
+    assert_eq!(attempt_reshape.unwrap().strides(), &[9, 3, 1, 1]);
 
     // expanded at dim 0
     let shape = Shape {
-        shape: vec![8, 5],
-        strides: vec![0, 1],
+        shape: [8, 5, 0, 0],
+        strides: [0, 1, 0, 0],
+        ndim: 2,
         offset: 0,
     };
     let attempt_reshape = shape.attempt_reshape_without_copying(&[4, 2, 5]);
-    assert_eq!(attempt_reshape.unwrap().strides, &[0, 0, 1]);
+    assert_eq!(attempt_reshape.unwrap().strides(), &[0, 0, 1]);
 
     // expanded at dim 0
     let shape = Shape {
-        shape: vec![3, 6],
-        strides: vec![0, 1],
+        shape: [3, 6, 0, 0],
+        strides: [0, 1, 0, 0],
+        ndim: 2,
         offset: 0,
     };
     let attempt_reshape = shape.attempt_reshape_without_copying(&[2, 3, 3]);
@@ -85,35 +90,39 @@ fn test_attempt_reshape_without_copying() {
 
     // expanded at dim 0
     let shape = Shape {
-        shape: vec![3, 6],
-        strides: vec![0, 1],
+        shape: [3, 6, 0, 0],
+        strides: [0, 1, 0, 0],
+        ndim: 2,
         offset: 0,
     };
     let attempt_reshape = shape.attempt_reshape_without_copying(&[3, 2, 3]);
-    assert_eq!(attempt_reshape.unwrap().strides, &[0, 3, 1]);
+    assert_eq!(attempt_reshape.unwrap().strides(), &[0, 3, 1]);
 
     // expanded at dim 0
     let shape = Shape {
-        shape: vec![6],
-        strides: vec![0],
+        shape: [6, 0, 0, 0],
+        strides: [0, 0, 0, 0],
+        ndim: 1,
         offset: 0,
     };
     let attempt_reshape = shape.attempt_reshape_without_copying(&[1, 1, 6]);
-    assert_eq!(attempt_reshape.unwrap().strides, &[0, 0, 0]);
+    assert_eq!(attempt_reshape.unwrap().strides(), &[0, 0, 0]);
 
     // expanded at dim 1
     let shape = Shape {
-        shape: vec![4, 3, 2],
-        strides: vec![2, 0, 1],
+        shape: [4, 3, 2, 0],
+        strides: [2, 0, 1, 0],
+        ndim: 3,
         offset: 0,
     };
     let attempt_reshape = shape.attempt_reshape_without_copying(&[4, 3, 1, 2]);
-    assert_eq!(attempt_reshape.unwrap().strides, &[2, 0, 2, 1]);
+    assert_eq!(attempt_reshape.unwrap().strides(), &[2, 0, 2, 1]);
 
     // transpose or permute
     let shape = Shape {
-        shape: vec![4, 3, 2],
-        strides: vec![6, 2, 1],
+        shape: [4, 3, 2, 0],
+        strides: [6, 2, 1, 0],
+        ndim: 3,
         offset: 0,
     }
     .permute(&[2, 1, 0]);

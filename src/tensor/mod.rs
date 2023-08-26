@@ -31,7 +31,7 @@ where
     T: Num,
 {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-        write!(f, "Tensor with shape {:?}", self.shape.shape)
+        write!(f, "Tensor with shape {:?}", self.shape.shape())
     }
 }
 
@@ -43,7 +43,7 @@ where
         write!(
             f,
             "Tensor with shape: {:?} and stride: {:?} and data: {:?}",
-            self.shape.shape,
+            self.shape.shape(),
             self.shape.strides,
             self.data.as_slice()
         )
@@ -185,8 +185,9 @@ where
 {
     pub fn new(data: AVec<T>) -> Self {
         let shape = Shape {
-            shape: [data.len()].into(),
-            strides: [1].into(),
+            shape: [data.len(), 0, 0, 0],
+            strides: [1, 0, 0, 0],
+            ndim: 1,
             offset: 0,
         };
         Self {
@@ -263,11 +264,7 @@ where
     // lazy init of tensor with value
     pub fn full(fill_value: T, shape: &[usize]) -> Self {
         let data = avec![fill_value; 1];
-        let shape = Shape {
-            shape: shape.to_vec(),
-            strides: vec![0; shape.len()],
-            offset: 0,
-        };
+        let shape = Shape::full(shape);
         Self {
             data: Arc::new(data),
             shape,
@@ -275,7 +272,7 @@ where
     }
 
     pub fn full_like(fill_value: T, other: &Self) -> Self {
-        Self::full(fill_value, &other.shape.shape)
+        Self::full(fill_value, &other.shape.shape())
     }
 
     pub fn ones(shape: &[usize]) -> Self {
@@ -287,11 +284,11 @@ where
     }
 
     pub fn ones_like(other: &Self) -> Self {
-        Self::ones(&other.shape.shape)
+        Self::ones(&other.shape.shape())
     }
 
     pub fn zeros_like(other: &Self) -> Self {
-        Self::zeros(&other.shape.shape)
+        Self::zeros(&other.shape.shape())
     }
 
     #[inline]
@@ -367,7 +364,7 @@ where
         }
         Self {
             data: Arc::new(self.ravel()),
-            shape: Shape::new(&self.shape.shape),
+            shape: Shape::new(self.shape()),
         }
     }
 
@@ -381,7 +378,7 @@ where
     pub fn T(&self) -> Self {
         let mut new_shape = self.shape.shape.clone();
         new_shape.reverse();
-        self.permute(&new_shape)
+        self.permute(&new_shape[4 - self.shape.ndim..])
     }
 
     pub fn permute(&self, dims: &[usize]) -> Self {
@@ -428,7 +425,7 @@ where
     }
 
     pub fn dim_iter(&self, dim: usize) -> DimIterator<T> {
-        assert_dim!(dim, self.shape.ndim());
+        assert_dim!(dim, self.shape.ndim);
         DimIterator {
             tensor: self,
             iter_dim: dim,
@@ -495,7 +492,7 @@ where
         );
         Self {
             data: Arc::new(data),
-            shape: Shape::new(&self.shape.shape),
+            shape: Shape::new(&self.shape.shape()),
         }
     }
 
@@ -504,7 +501,7 @@ where
             return self.zip(other, f);
         }
 
-        if self.shape.ndim() == other.shape.ndim() {
+        if self.shape.ndim == other.shape.ndim {
             let new_shape = self
                 .shape()
                 .iter()
@@ -516,21 +513,21 @@ where
             return expanded_self.zip(&expanded_other, f);
         }
 
-        let ones_to_add = self.shape.ndim().abs_diff(other.shape.ndim());
+        let ones_to_add = self.shape.ndim.abs_diff(other.shape.ndim);
         let mut new_shape = vec![1; ones_to_add];
 
-        if self.shape.ndim() < other.shape.ndim() {
+        if self.shape.ndim < other.shape.ndim {
             new_shape.extend_from_slice(self.shape());
             return self.reshape(&new_shape).broadcasted_zip(&other, f);
         } else {
-            // here self.shape.ndim() > other.shape.ndim()
+            // here self.shape.ndim > other.shape.ndim
             new_shape.extend_from_slice(other.shape());
             other.reshape(&new_shape).broadcasted_zip(&self, f)
         }
     }
 
     pub fn reduce(&self, default: T, dim: usize, f: impl Fn(T, T) -> T) -> Self {
-        assert_dim!(dim, self.shape.ndim());
+        assert_dim!(dim, self.shape.ndim);
         let (reduced_shape, stride_shape) = self.shape.reduce_dim(dim);
         let mut reduce_buffer = avec![default; reduced_shape.numel()];
         self.shape.index_iter().for_each(|index| {

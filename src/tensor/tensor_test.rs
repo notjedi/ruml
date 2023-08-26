@@ -83,8 +83,8 @@ fn test_tensor_dim_iter() {
 
 #[test]
 fn test_tensor_ops() {
-    let add_shape: Shape = vec![2, 2, 2].into();
-    let add_tensor = Tensor::arange(add_shape.numel()).reshape(&add_shape.shape) + 5.0;
+    let add_shape = Shape::new(&[2, 2, 2]);
+    let add_tensor = Tensor::arange(add_shape.numel()).reshape(&add_shape.shape()) + 5.0;
     assert_eq!(
         add_tensor.ravel(),
         avec![5.0, 6.0, 7.0, 8.0, 9.0, 10.0, 11.0, 12.0],
