@@ -26,6 +26,19 @@ where
     pub(crate) shape: Shape,
 }
 
+impl<T> Clone for Tensor<T>
+where
+    T: Num,
+{
+    fn clone(&self) -> Self {
+        Self {
+            // https://stackoverflow.com/a/55750742
+            data: Arc::new((*self.data).clone()),
+            shape: self.shape.clone(),
+        }
+    }
+}
+
 impl<T> Display for Tensor<T>
 where
     T: Num,
@@ -274,7 +287,7 @@ where
     }
 
     pub fn full_like(fill_value: T, other: &Self) -> Self {
-        Self::full(fill_value, &other.shape.shape())
+        Self::full(fill_value, other.shape.shape())
     }
 
     pub fn ones(shape: &[usize]) -> Self {
@@ -286,11 +299,11 @@ where
     }
 
     pub fn ones_like(other: &Self) -> Self {
-        Self::ones(&other.shape.shape())
+        Self::ones(other.shape.shape())
     }
 
     pub fn zeros_like(other: &Self) -> Self {
-        Self::zeros(&other.shape.shape())
+        Self::zeros(other.shape.shape())
     }
 
     #[inline]
@@ -326,16 +339,7 @@ where
 
     #[inline]
     pub fn ravel(&self) -> AVec<T> {
-        AVec::from_iter(CACHELINE_ALIGN, self.into_iter())
-    }
-
-    #[inline]
-    pub fn clone(&self) -> Self {
-        Self {
-            // https://stackoverflow.com/a/55750742
-            data: Arc::new((*self.data).clone()),
-            shape: self.shape.clone(),
-        }
+        AVec::from_iter(CACHELINE_ALIGN, self)
     }
 
     #[inline]
@@ -378,7 +382,7 @@ where
 
     #[allow(non_snake_case)]
     pub fn T(&self) -> Self {
-        let mut new_shape = self.shape.shape.clone();
+        let mut new_shape = self.shape.shape;
         new_shape.reverse();
         self.permute(&new_shape[4 - self.shape.ndim..])
     }
@@ -400,7 +404,7 @@ where
             };
         }
         let reshape_tensor = self.contiguous();
-        reshape_tensor.reshape(&shape)
+        reshape_tensor.reshape(shape)
     }
 
     pub fn expand_to(&self, dims: &[usize]) -> Self {
@@ -436,11 +440,11 @@ where
     }
 
     pub fn eq(&self, other: &Self) -> Self {
-        self.broadcasted_zip(&other, |x, y| if x == y { T::one() } else { T::zero() })
+        self.broadcasted_zip(other, |x, y| if x == y { T::one() } else { T::zero() })
     }
 
     pub fn nq(&self, other: &Self) -> Self {
-        self.broadcasted_zip(&other, |x, y| if x != y { T::one() } else { T::zero() })
+        self.broadcasted_zip(other, |x, y| if x != y { T::one() } else { T::zero() })
     }
 
     pub fn as_type<S>(&self) -> Tensor<S>
@@ -488,13 +492,11 @@ where
         );
         let data = AVec::from_iter(
             CACHELINE_ALIGN,
-            self.into_iter()
-                .zip(other.into_iter())
-                .map(|(x, y)| f(x, y)),
+            self.into_iter().zip(other).map(|(x, y)| f(x, y)),
         );
         Self {
             data: Arc::new(data),
-            shape: Shape::new(&self.shape.shape()),
+            shape: Shape::new(self.shape.shape()),
         }
     }
 
@@ -520,11 +522,11 @@ where
 
         if self.shape.ndim < other.shape.ndim {
             new_shape.extend_from_slice(self.shape());
-            return self.reshape(&new_shape).broadcasted_zip(&other, f);
+            self.reshape(&new_shape).broadcasted_zip(other, f)
         } else {
             // here self.shape.ndim > other.shape.ndim
             new_shape.extend_from_slice(other.shape());
-            other.reshape(&new_shape).broadcasted_zip(&self, f)
+            other.reshape(&new_shape).broadcasted_zip(self, f)
         }
     }
 

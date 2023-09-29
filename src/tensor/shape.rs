@@ -104,7 +104,7 @@ impl Shape {
 
     #[inline]
     pub fn is_contiguous(&self) -> bool {
-        self.strides() == Shape::new(&self.shape()).strides()
+        self.strides() == Shape::new(self.shape()).strides()
     }
 
     #[inline]
@@ -141,11 +141,11 @@ impl Shape {
     pub(crate) fn remove_dim(&self, dim: usize) -> Self {
         assert_dim!(dim, self.ndim);
 
-        let mut shape = self.shape.clone();
+        let mut shape = self.shape;
         shape[dim..].rotate_left(1);
         shape[3] = 0;
 
-        let mut strides = self.strides.clone();
+        let mut strides = self.strides;
         strides[dim..].rotate_left(1);
         strides[3] = 0;
 
@@ -163,7 +163,7 @@ impl Shape {
     #[inline]
     pub(crate) fn reduce_dim(&self, dim: usize) -> (Self, Self) {
         assert_dim!(dim, self.ndim);
-        let mut reduced_shape = self.shape.clone();
+        let mut reduced_shape = self.shape;
         reduced_shape[dim] = 1;
 
         let mut reduced_shape = Shape::new(&reduced_shape[..self.ndim]);
@@ -428,7 +428,7 @@ impl<'a> Iterator for TensorIndexIterator<'a> {
             self.index[dim] = 0;
         }
         self.exhausted = self.index.iter().all(|&x| x == 0);
-        return Some(result);
+        Some(result)
     }
 }
 

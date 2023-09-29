@@ -244,7 +244,6 @@ where
         let b = Tensor::<U>::arange(len);
         let out = T::add_elementwise(&a, &b);
         (0..len)
-            .into_iter()
             .zip(out.into_iter())
             .enumerate()
             .for_each(|(i, (base, res))| {
@@ -263,7 +262,6 @@ where
         let b = U::from(10).unwrap();
         let out = T::add_scalar(&a, b);
         (0..len)
-            .into_iter()
             .zip(out.into_iter())
             .enumerate()
             .for_each(|(i, (base, res))| {

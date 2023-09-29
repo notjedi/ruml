@@ -67,13 +67,13 @@ impl Backend<f32> for AVX2Backend {
             // let row_3 = &a.data[(i + 3) * a_col..(i + 3) * a_col + a_col];
 
             for j in (0..num_iters).map(|x| x * CACHE_LINE_F32) {
-                let mut buffer_0 = AlignedArray([0.0 as f32; CACHE_LINE_F32]);
+                let mut buffer_0 = AlignedArray([0.0_f32; CACHE_LINE_F32]);
                 let (_, aligned_0, _) = buffer_0.0.as_simd_mut::<{ Self::CHUNK_SIZE }>();
-                let mut buffer_1 = AlignedArray([0.0 as f32; CACHE_LINE_F32]);
+                let mut buffer_1 = AlignedArray([0.0_f32; CACHE_LINE_F32]);
                 let (_, aligned_1, _) = buffer_1.0.as_simd_mut::<{ Self::CHUNK_SIZE }>();
-                let mut buffer_2 = AlignedArray([0.0 as f32; CACHE_LINE_F32]);
+                let mut buffer_2 = AlignedArray([0.0_f32; CACHE_LINE_F32]);
                 let (_, aligned_2, _) = buffer_2.0.as_simd_mut::<{ Self::CHUNK_SIZE }>();
-                // let mut buffer_3 = AlignedArray([0.0 as f32; CACHE_LINE_F32]);
+                // let mut buffer_3 = AlignedArray([0.0_f32; CACHE_LINE_F32]);
                 // let (_, aligned_3, _) = buffer_3.0.as_simd_mut::<{ Self::CHUNK_SIZE }>();
 
                 row_0
@@ -125,7 +125,7 @@ impl Backend<f32> for AVX2Backend {
             if rem > 0 {
                 let rows = [row_0, row_1, row_2];
                 for (k, &row) in rows.iter().enumerate() {
-                    let mut buffer = [0.0 as f32; CACHE_LINE_F32];
+                    let mut buffer = [0.0_f32; CACHE_LINE_F32];
                     row.iter().enumerate().for_each(|(k, &elem)| {
                         let col = &b.data[(k * b_col) + j_final..(k * b_col) + j_final + rem];
                         buffer
@@ -147,7 +147,7 @@ impl Backend<f32> for AVX2Backend {
             (a_row - row_rem..a_row).for_each(|i| {
                 let row = &a.data[i * a_col..i * a_col + a_col];
                 for j in (0..num_iters).map(|x| x * CACHE_LINE_F32) {
-                    let mut buffer = AlignedArray([0.0 as f32; CACHE_LINE_F32]);
+                    let mut buffer = AlignedArray([0.0_f32; CACHE_LINE_F32]);
                     let (_, aligned, _) = buffer.0.as_simd_mut::<{ Self::CHUNK_SIZE }>();
 
                     row.iter().enumerate().for_each(|(k, &elem)| {
@@ -166,7 +166,7 @@ impl Backend<f32> for AVX2Backend {
                         .copy_from_slice(buffer.0.as_slice());
                 }
 
-                let mut buffer = [0.0 as f32; CACHE_LINE_F32];
+                let mut buffer = [0.0_f32; CACHE_LINE_F32];
                 row.iter().enumerate().for_each(|(k, &elem)| {
                     let col = &b.data[(k * b_col) + j_final..(k * b_col) + j_final + rem];
                     buffer
@@ -414,7 +414,7 @@ impl Backend<f32> for AVX2Backend {
 
         match dim {
             0 => {
-                let mut data = avec![0.0 as f32; new_shape.numel()];
+                let mut data = avec![0.0_f32; new_shape.numel()];
                 let (_, d_aligned, d_suffix) = data.as_simd_mut::<{ Self::CHUNK_SIZE }>();
 
                 tensor.data.chunks_exact(stride).for_each(|row| {
@@ -440,10 +440,10 @@ impl Backend<f32> for AVX2Backend {
 
                 // TODO: using SIMD for 2-D tensors will only add to overhead, cause row_stride would be 1, so will be `stride` chunks
                 tensor.data.chunks_exact(stride).for_each(|row| {
-                    let mut acc = avec![0.0 as f32; row_stride];
+                    let mut acc = avec![0.0_f32; row_stride];
                     {
                         let (_, d_aligned, d_suffix) = acc.as_simd_mut::<{ Self::CHUNK_SIZE }>();
-                        if d_aligned.len() == 0 {
+                        if d_aligned.is_empty() {
                             // NOTE: row_stride < 8, so we need to iterate over the suffix bug, ig
                             // we are not guaranteed that d_aligned will have elements even if
                             // row_stride is > 8 and aligned. from:
@@ -491,7 +491,7 @@ impl Backend<f32> for AVX2Backend {
                     // 4-D tensor
                     let prev_stride = tensor.shape.strides[dim - 1];
                     tensor.data.chunks_exact(prev_stride).for_each(|row| {
-                        let mut acc = avec![0.0 as f32; row_stride];
+                        let mut acc = avec![0.0_f32; row_stride];
                         let (_, d_aligned, d_suffix) = acc.as_simd_mut::<{ Self::CHUNK_SIZE }>();
 
                         row.chunks_exact(row_stride).for_each(|chunk| {
