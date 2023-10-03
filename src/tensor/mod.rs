@@ -23,6 +23,7 @@ where
     T: Num,
 {
     pub(crate) data: Arc<AVec<T>>,
+    pub(crate) name: String,
     pub(crate) shape: Shape,
     pub(crate) op: Op,
 }
@@ -40,6 +41,7 @@ where
             // shape: self.shape,
             // op: self.op,
             data: Arc::new((*self.data).clone()),
+            name: self.name.clone(),
             shape: self.shape,
             op: self.op,
         }
@@ -71,7 +73,7 @@ where
 }
 
 macro_rules! impl_ops {
-    ($op_trait:ident, $op_fn:ident, $op:tt) => {
+    ($op_trait:ident, $op_fn:ident, $op:tt, $name:literal) => {
         impl<T> $op_trait<&Tensor<T>> for &Tensor<T>
         where
             T: Num,
@@ -128,6 +130,7 @@ macro_rules! impl_ops {
                 Tensor {
                     data: Arc::new(add_vec),
                     shape: self.shape,
+                    name: $name.into(),
                     op: Op::Todo,
                 }
             }
@@ -145,6 +148,7 @@ macro_rules! impl_ops {
                 Tensor {
                     data: Arc::new(add_vec),
                     shape: self.shape,
+                    name: $name.into(),
                     op: Op::Todo,
                 }
             }
@@ -154,10 +158,10 @@ macro_rules! impl_ops {
 
 // https://stackoverflow.com/questions/73464666/how-to-implement-stdops-traits-for-multiple-rhs
 // https://stackoverflow.com/questions/24594374/how-can-an-operator-be-overloaded-for-different-rhs-types-and-return-values
-impl_ops!(Add, add, +);
-impl_ops!(Sub, sub, -);
-impl_ops!(Mul, mul, *);
-impl_ops!(Div, div, /);
+impl_ops!(Add, add, +, "add");
+impl_ops!(Sub, sub, -, "sub");
+impl_ops!(Mul, mul, *, "mul");
+impl_ops!(Div, div, /, "div");
 
 impl<T: Num> Neg for Tensor<T> {
     type Output = Tensor<T>;
@@ -168,6 +172,7 @@ impl<T: Num> Neg for Tensor<T> {
         Tensor {
             data: Arc::new(neg_vec),
             shape: self.shape,
+            name: "neg".into(),
             op: Op::Negate,
         }
     }
@@ -182,6 +187,7 @@ impl<T: Num> Neg for &Tensor<T> {
         Tensor {
             data: Arc::new(neg_vec),
             shape: self.shape,
+            name: "neg".into(),
             op: Op::Negate,
         }
     }
@@ -219,6 +225,7 @@ where
         Self {
             data: Arc::new(data),
             shape,
+            name: String::new(),
             op: Op::Noop,
         }
     }
@@ -228,6 +235,7 @@ where
         Self {
             data: Arc::new(data),
             shape: Shape::from_len(len),
+            name: "arange".into(),
             op: Op::Noop,
         }
     }
@@ -240,6 +248,7 @@ where
         Self {
             data: Arc::new(eye),
             shape: vec![dim; 2].into(),
+            name: "eye".into(),
             op: Op::Noop,
         }
     }
@@ -255,6 +264,7 @@ where
         Self {
             data: Arc::new(tril),
             shape: vec![dim; 2].into(),
+            name: "tril".into(),
             op: Op::Noop,
         }
     }
@@ -270,6 +280,7 @@ where
         Self {
             data: Arc::new(triu),
             shape: vec![dim; 2].into(),
+            name: "triu".into(),
             op: Op::Noop,
         }
     }
@@ -289,6 +300,7 @@ where
         Self {
             data: Arc::new(data),
             shape,
+            name: "randn".into(),
             op: Op::Noop,
         }
     }
@@ -300,6 +312,7 @@ where
         Self {
             data: Arc::new(data),
             shape,
+            name: "full".into(),
             op: Op::Noop,
         }
     }
@@ -365,6 +378,7 @@ where
         Self {
             data: Arc::clone(&self.data),
             shape: self.shape,
+            name: self.name.clone(),
             op: self.op,
         }
     }
@@ -374,6 +388,7 @@ where
         Self {
             data: Arc::clone(&self.data),
             shape: self.shape.squeeze(),
+            name: "squeeze".into(),
             op: Op::Todo,
         }
     }
@@ -386,12 +401,14 @@ where
             return Self {
                 data: Arc::clone(&self.data),
                 shape: self.shape,
-                op: Op::Todo,
+                name: "contiguous".into(),
+                op: self.op,
             };
         }
         Self {
             data: Arc::new(self.ravel()),
             shape: Shape::new(self.shape()),
+            name: "contiguous".into(),
             op: Op::Todo,
         }
     }
@@ -414,6 +431,7 @@ where
         Self {
             data: Arc::clone(&self.data),
             shape,
+            name: "permute".into(),
             op: Op::Permute,
         }
     }
@@ -424,6 +442,7 @@ where
             return Self {
                 data: Arc::clone(&self.data),
                 shape,
+                name: "reshape".into(),
                 op: Op::Reshape,
             };
         }
@@ -435,6 +454,7 @@ where
         Self {
             data: Arc::clone(&self.data),
             shape: self.shape.expand_to(dims),
+            name: "expand_to".into(),
             op: Op::Expand,
         }
     }
@@ -444,6 +464,7 @@ where
         Self {
             data: Arc::clone(&self.data),
             shape,
+            name: "expand".into(),
             op: Op::Expand,
         }
     }
@@ -453,6 +474,7 @@ where
         Self {
             data: Arc::clone(&self.data),
             shape,
+            name: "transpose".into(),
             op: Op::Transpose,
         }
     }
@@ -486,6 +508,7 @@ where
         Tensor {
             data: Arc::new(data),
             shape: self.shape,
+            name: "as_type".into(),
             op: self.op,
         }
     }
@@ -495,6 +518,7 @@ where
         Self {
             data: Arc::new(map_data),
             shape: self.shape,
+            name: "map".into(),
             op: Op::Todo,
         }
     }
@@ -526,6 +550,7 @@ where
         Self {
             data: Arc::new(data),
             shape: Shape::new(self.shape.shape()),
+            name: "zip".into(),
             op: Op::Todo,
         }
     }
@@ -572,6 +597,7 @@ where
         Self {
             data: Arc::new(reduce_buffer),
             shape: reduced_shape,
+            name: "reduce".into(),
             op: Op::Todo,
         }
     }
@@ -673,6 +699,7 @@ where
         Self {
             data: Arc::new(linspace),
             shape: vec![steps; 1].into(),
+            name: "linspace".into(),
             op: Op::Todo,
         }
     }
@@ -752,6 +779,7 @@ where
         let tensor = Tensor {
             data: Arc::clone(&self.tensor.data),
             shape,
+            name: "tensor".into(),
             op: Op::Todo,
         };
         Some(tensor)

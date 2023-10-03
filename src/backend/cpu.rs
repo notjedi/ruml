@@ -185,6 +185,7 @@ impl Backend<f32> for AVX2Backend {
         Tensor {
             data: Arc::new(data),
             shape: new_shape,
+            name: "matmul".into(),
             op: Op::Todo,
         }
     }
@@ -213,6 +214,7 @@ impl Backend<f32> for AVX2Backend {
         Tensor {
             data: Arc::new(data),
             shape: new_shape,
+            name: "matmul_naive".into(),
             op: Op::Todo,
         }
     }
@@ -233,6 +235,7 @@ impl Backend<f32> for AVX2Backend {
         Tensor {
             data: Arc::new(data),
             shape: tensor.shape.clone(),
+            name: "exp".into(),
             op: Op::Todo,
         }
     }
@@ -253,6 +256,7 @@ impl Backend<f32> for AVX2Backend {
         Tensor {
             data: Arc::new(data),
             shape: tensor.shape.clone(),
+            name: "log2".into(),
             op: Op::Todo,
         }
     }
@@ -281,6 +285,7 @@ impl Backend<f32> for AVX2Backend {
         Tensor {
             data: Arc::new(data),
             shape: tensor.shape.clone(),
+            name: "relu".into(),
             op: Op::Todo,
         }
     }
@@ -300,6 +305,7 @@ impl Backend<f32> for AVX2Backend {
         Tensor {
             data: Arc::new(data),
             shape: tensor.shape.clone(),
+            name: "sqrt".into(),
             op: Op::Todo,
         }
     }
@@ -325,6 +331,7 @@ impl Backend<f32> for AVX2Backend {
         Tensor {
             data: Arc::new(data),
             shape: tensor.shape.clone(),
+            name: "silu".into(),
             op: Op::SiLU,
         }
     }
@@ -349,6 +356,7 @@ impl Backend<f32> for AVX2Backend {
         Tensor {
             data: Arc::new(data),
             shape: tensor.shape.clone(),
+            name: "sigmoid".into(),
             op: Op::Todo,
         }
     }
@@ -419,6 +427,7 @@ impl Backend<f32> for AVX2Backend {
             Tensor {
                 data: Arc::new(data),
                 shape: new_shape,
+                name: "sum".into(),
                 op: Op::Sum,
             }
         }
@@ -444,6 +453,7 @@ impl Backend<f32> for AVX2Backend {
                 Tensor {
                     data: Arc::new(data),
                     shape: new_shape,
+                    name: "sum".into(),
                     op: Op::Sum,
                 }
             }
@@ -491,6 +501,7 @@ impl Backend<f32> for AVX2Backend {
                 Tensor {
                     data: Arc::new(data),
                     shape: new_shape,
+                    name: "sum".into(),
                     op: Op::Sum,
                 }
             }
@@ -527,6 +538,7 @@ impl Backend<f32> for AVX2Backend {
                     Tensor {
                         data: Arc::new(data),
                         shape: new_shape,
+                        name: "sum".into(),
                         op: Op::Sum,
                     }
                 }
@@ -552,6 +564,7 @@ impl Backend<f32> for AVX2Backend {
         Tensor {
             data: Arc::new(data),
             shape: a.shape.clone(),
+            name: "add_scalar".into(),
             op: Op::Add,
         }
     }
@@ -572,6 +585,7 @@ impl Backend<f32> for AVX2Backend {
         Tensor {
             data: Arc::new(data),
             shape: a.shape.clone(),
+            name: "sub_scalar".into(),
             op: Op::Sub,
         }
     }
@@ -592,6 +606,7 @@ impl Backend<f32> for AVX2Backend {
         Tensor {
             data: Arc::new(data),
             shape: a.shape.clone(),
+            name: "mul_scalar".into(),
             op: Op::Mul,
         }
     }
@@ -612,6 +627,7 @@ impl Backend<f32> for AVX2Backend {
         Tensor {
             data: Arc::new(data),
             shape: a.shape.clone(),
+            name: "div_scalar".into(),
             op: Op::Div,
         }
     }
@@ -634,6 +650,7 @@ impl Backend<f32> for AVX2Backend {
         Tensor {
             data: Arc::new(data),
             shape: a.shape.clone(),
+            name: "add_elementwise".into(),
             op: Op::Add,
         }
     }
@@ -656,6 +673,7 @@ impl Backend<f32> for AVX2Backend {
         Tensor {
             data: Arc::new(data),
             shape: a.shape.clone(),
+            name: "sub_elementwise".into(),
             op: Op::Sub,
         }
     }
@@ -678,6 +696,7 @@ impl Backend<f32> for AVX2Backend {
         Tensor {
             data: Arc::new(data),
             shape: a.shape.clone(),
+            name: "mul_elementwise".into(),
             op: Op::Mul,
         }
     }

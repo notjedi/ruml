@@ -42,3 +42,9 @@ pub enum Op {
     Transpose,
     View,
 }
+
+impl Default for Op {
+    fn default() -> Self {
+        Op::Noop
+    }
+}
