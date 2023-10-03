@@ -4,7 +4,7 @@ pub use self::shape::{Shape, TensorIndexIterator};
 use crate::{
     assert_dim, assert_numel,
     types::{Num, NumFloat, NumInt},
-    CACHELINE_ALIGN,
+    Op, CACHELINE_ALIGN,
 };
 use aligned_vec::{avec, AVec};
 use alloc::vec;
@@ -24,6 +24,7 @@ where
 {
     pub(crate) data: Arc<AVec<T>>,
     pub(crate) shape: Shape,
+    pub(crate) op: Op,
 }
 
 impl<T> Clone for Tensor<T>
@@ -33,8 +34,14 @@ where
     fn clone(&self) -> Self {
         Self {
             // https://stackoverflow.com/a/55750742
+            // TODO: is this right?
+            // TODO: remove shallow clone
+            // data: Arc::clone(&self.data),
+            // shape: self.shape,
+            // op: self.op,
             data: Arc::new((*self.data).clone()),
-            shape: self.shape.clone(),
+            shape: self.shape,
+            op: self.op,
         }
     }
 }
@@ -120,7 +127,8 @@ macro_rules! impl_ops {
                 add_vec.iter_mut().for_each(|x| *x = *x $op rhs);
                 Tensor {
                     data: Arc::new(add_vec),
-                    shape: self.shape.clone(),
+                    shape: self.shape,
+                    op: Op::Todo,
                 }
             }
         }
@@ -136,7 +144,8 @@ macro_rules! impl_ops {
                 add_vec.iter_mut().for_each(|x| *x = *x $op rhs);
                 Tensor {
                     data: Arc::new(add_vec),
-                    shape: self.shape.clone(),
+                    shape: self.shape,
+                    op: Op::Todo,
                 }
             }
         }
@@ -158,7 +167,8 @@ impl<T: Num> Neg for Tensor<T> {
         neg_vec.iter_mut().for_each(|x| *x = -(*x));
         Tensor {
             data: Arc::new(neg_vec),
-            shape: self.shape.clone(),
+            shape: self.shape,
+            op: Op::Negate,
         }
     }
 }
@@ -171,7 +181,8 @@ impl<T: Num> Neg for &Tensor<T> {
         neg_vec.iter_mut().for_each(|x| *x = -(*x));
         Tensor {
             data: Arc::new(neg_vec),
-            shape: self.shape.clone(),
+            shape: self.shape,
+            op: Op::Negate,
         }
     }
 }
@@ -208,6 +219,7 @@ where
         Self {
             data: Arc::new(data),
             shape,
+            op: Op::Noop,
         }
     }
 
@@ -216,6 +228,7 @@ where
         Self {
             data: Arc::new(data),
             shape: Shape::from_len(len),
+            op: Op::Noop,
         }
     }
 
@@ -227,6 +240,7 @@ where
         Self {
             data: Arc::new(eye),
             shape: vec![dim; 2].into(),
+            op: Op::Noop,
         }
     }
 
@@ -241,6 +255,7 @@ where
         Self {
             data: Arc::new(tril),
             shape: vec![dim; 2].into(),
+            op: Op::Noop,
         }
     }
 
@@ -255,6 +270,7 @@ where
         Self {
             data: Arc::new(triu),
             shape: vec![dim; 2].into(),
+            op: Op::Noop,
         }
     }
 
@@ -273,6 +289,7 @@ where
         Self {
             data: Arc::new(data),
             shape,
+            op: Op::Noop,
         }
     }
 
@@ -283,6 +300,7 @@ where
         Self {
             data: Arc::new(data),
             shape,
+            op: Op::Noop,
         }
     }
 
@@ -346,7 +364,8 @@ where
     pub fn shallow_clone(&self) -> Self {
         Self {
             data: Arc::clone(&self.data),
-            shape: self.shape.clone(),
+            shape: self.shape,
+            op: self.op,
         }
     }
 
@@ -355,6 +374,7 @@ where
         Self {
             data: Arc::clone(&self.data),
             shape: self.shape.squeeze(),
+            op: Op::Todo,
         }
     }
 
@@ -365,12 +385,14 @@ where
             // so we follow torch
             return Self {
                 data: Arc::clone(&self.data),
-                shape: self.shape.clone(),
+                shape: self.shape,
+                op: Op::Todo,
             };
         }
         Self {
             data: Arc::new(self.ravel()),
             shape: Shape::new(self.shape()),
+            op: Op::Todo,
         }
     }
 
@@ -392,6 +414,7 @@ where
         Self {
             data: Arc::clone(&self.data),
             shape,
+            op: Op::Permute,
         }
     }
 
@@ -401,6 +424,7 @@ where
             return Self {
                 data: Arc::clone(&self.data),
                 shape,
+                op: Op::Reshape,
             };
         }
         let reshape_tensor = self.contiguous();
@@ -411,6 +435,7 @@ where
         Self {
             data: Arc::clone(&self.data),
             shape: self.shape.expand_to(dims),
+            op: Op::Expand,
         }
     }
 
@@ -419,6 +444,7 @@ where
         Self {
             data: Arc::clone(&self.data),
             shape,
+            op: Op::Expand,
         }
     }
 
@@ -427,6 +453,7 @@ where
         Self {
             data: Arc::clone(&self.data),
             shape,
+            op: Op::Transpose,
         }
     }
 
@@ -458,7 +485,8 @@ where
         );
         Tensor {
             data: Arc::new(data),
-            shape: self.shape.clone(),
+            shape: self.shape,
+            op: self.op,
         }
     }
 
@@ -466,7 +494,8 @@ where
         let map_data = AVec::from_iter(CACHELINE_ALIGN, (*self.data).iter().map(|&x| f(x)));
         Self {
             data: Arc::new(map_data),
-            shape: self.shape.clone(),
+            shape: self.shape,
+            op: Op::Todo,
         }
     }
 
@@ -497,6 +526,7 @@ where
         Self {
             data: Arc::new(data),
             shape: Shape::new(self.shape.shape()),
+            op: Op::Todo,
         }
     }
 
@@ -542,6 +572,7 @@ where
         Self {
             data: Arc::new(reduce_buffer),
             shape: reduced_shape,
+            op: Op::Todo,
         }
     }
 
@@ -556,6 +587,7 @@ where
             None => {
                 // BUG: wont' work for non-contiguous tensors
                 let sum = avec![self.data.iter().fold(T::zero(), |acc, &x| acc + x)];
+                // TODO: set op
                 Self::new(sum)
             }
         }
@@ -570,6 +602,7 @@ where
             Some(dim) => self.reduce(T::min_value(), dim, |x, y| if x > y { x } else { y }),
             None => {
                 let sum = avec![self.data.iter().fold(T::zero(), |acc, &x| acc + x)];
+                // TODO: set op
                 Self::new(sum)
             }
         }
@@ -584,6 +617,7 @@ where
             Some(dim) => self.reduce(T::max_value(), dim, |x, y| if x < y { x } else { y }),
             None => {
                 let sum = avec![self.data.iter().fold(T::zero(), |acc, &x| acc + x)];
+                // TODO: set op
                 Self::new(sum)
             }
         }
@@ -639,6 +673,7 @@ where
         Self {
             data: Arc::new(linspace),
             shape: vec![steps; 1].into(),
+            op: Op::Todo,
         }
     }
 }
@@ -717,6 +752,7 @@ where
         let tensor = Tensor {
             data: Arc::clone(&self.tensor.data),
             shape,
+            op: Op::Todo,
         };
         Some(tensor)
     }

@@ -5,23 +5,26 @@
 // 4. https://github.com/apple/coremltools/blob/main/mlmodel/build/format/NeuralNetwork.pb.h#L2838
 // 5. https://github.com/apple/coremltools/blob/main/mlmodel/src/Validation/NeuralNetwork/NeuralNetworkValidator.cpp#L38
 
-pub enum UnaryOps {
+#[derive(Clone, Copy, Eq, PartialEq)]
+pub enum Op {
+    Noop,
+    Todo,
+
+    // UnaryOps
     Abs,
     Copy,
     Negate,
     None,
     Square,
     SquareRoot,
-}
 
-pub enum BinaryOps {
+    // BinaryOps
     Add,
     Div,
     Mul,
     Sub,
-}
 
-pub enum MlOps {
+    // MlOps
     Dot,
     GeLU,
     Mean,
@@ -31,9 +34,8 @@ pub enum MlOps {
     SiLU,
     Softmax,
     Sum,
-}
 
-pub enum ShapeOps {
+    // ShapeOps
     Expand,
     Permute,
     Reshape,

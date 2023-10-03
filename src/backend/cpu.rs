@@ -2,7 +2,7 @@ use aligned_vec::{avec, AVec};
 use rayon::prelude::{IntoParallelRefIterator, ParallelIterator};
 
 use super::Backend;
-use crate::{Shape, Tensor, CACHELINE_ALIGN};
+use crate::{Op, Shape, Tensor, CACHELINE_ALIGN};
 use alloc::sync::Arc;
 use core::ops::Add;
 use core::simd::{f32x8, SimdFloat};
@@ -185,6 +185,7 @@ impl Backend<f32> for AVX2Backend {
         Tensor {
             data: Arc::new(data),
             shape: new_shape,
+            op: Op::Todo,
         }
     }
 
@@ -212,6 +213,7 @@ impl Backend<f32> for AVX2Backend {
         Tensor {
             data: Arc::new(data),
             shape: new_shape,
+            op: Op::Todo,
         }
     }
 
@@ -231,6 +233,7 @@ impl Backend<f32> for AVX2Backend {
         Tensor {
             data: Arc::new(data),
             shape: tensor.shape.clone(),
+            op: Op::Todo,
         }
     }
 
@@ -250,6 +253,7 @@ impl Backend<f32> for AVX2Backend {
         Tensor {
             data: Arc::new(data),
             shape: tensor.shape.clone(),
+            op: Op::Todo,
         }
     }
 
@@ -277,6 +281,7 @@ impl Backend<f32> for AVX2Backend {
         Tensor {
             data: Arc::new(data),
             shape: tensor.shape.clone(),
+            op: Op::Todo,
         }
     }
 
@@ -295,6 +300,7 @@ impl Backend<f32> for AVX2Backend {
         Tensor {
             data: Arc::new(data),
             shape: tensor.shape.clone(),
+            op: Op::Todo,
         }
     }
 
@@ -319,6 +325,7 @@ impl Backend<f32> for AVX2Backend {
         Tensor {
             data: Arc::new(data),
             shape: tensor.shape.clone(),
+            op: Op::SiLU,
         }
     }
 
@@ -342,6 +349,7 @@ impl Backend<f32> for AVX2Backend {
         Tensor {
             data: Arc::new(data),
             shape: tensor.shape.clone(),
+            op: Op::Todo,
         }
     }
 
@@ -353,6 +361,7 @@ impl Backend<f32> for AVX2Backend {
         let (_, aligned, suffix) = tensor.data.as_simd::<{ Self::CHUNK_SIZE }>();
         let acc = f32x8::splat(0.0);
         let acc = aligned.iter().fold(acc, f32x8::add);
+        // TODO: set op
         acc.reduce_sum() + suffix.iter().sum::<f32>()
     }
 
@@ -361,6 +370,7 @@ impl Backend<f32> for AVX2Backend {
             tensor.is_contiguous(),
             "vector instructions are only supported for contiguous tensors"
         );
+        // TODO: set op
         tensor.data.par_iter().sum::<f32>()
     }
 
@@ -409,6 +419,7 @@ impl Backend<f32> for AVX2Backend {
             Tensor {
                 data: Arc::new(data),
                 shape: new_shape,
+                op: Op::Sum,
             }
         }
 
@@ -433,6 +444,7 @@ impl Backend<f32> for AVX2Backend {
                 Tensor {
                     data: Arc::new(data),
                     shape: new_shape,
+                    op: Op::Sum,
                 }
             }
             1 => {
@@ -479,6 +491,7 @@ impl Backend<f32> for AVX2Backend {
                 Tensor {
                     data: Arc::new(data),
                     shape: new_shape,
+                    op: Op::Sum,
                 }
             }
             2 => {
@@ -514,6 +527,7 @@ impl Backend<f32> for AVX2Backend {
                     Tensor {
                         data: Arc::new(data),
                         shape: new_shape,
+                        op: Op::Sum,
                     }
                 }
             }
@@ -538,6 +552,7 @@ impl Backend<f32> for AVX2Backend {
         Tensor {
             data: Arc::new(data),
             shape: a.shape.clone(),
+            op: Op::Add,
         }
     }
 
@@ -557,6 +572,7 @@ impl Backend<f32> for AVX2Backend {
         Tensor {
             data: Arc::new(data),
             shape: a.shape.clone(),
+            op: Op::Sub,
         }
     }
 
@@ -576,6 +592,7 @@ impl Backend<f32> for AVX2Backend {
         Tensor {
             data: Arc::new(data),
             shape: a.shape.clone(),
+            op: Op::Mul,
         }
     }
 
@@ -595,6 +612,7 @@ impl Backend<f32> for AVX2Backend {
         Tensor {
             data: Arc::new(data),
             shape: a.shape.clone(),
+            op: Op::Div,
         }
     }
 
@@ -616,6 +634,7 @@ impl Backend<f32> for AVX2Backend {
         Tensor {
             data: Arc::new(data),
             shape: a.shape.clone(),
+            op: Op::Add,
         }
     }
 
@@ -637,6 +656,7 @@ impl Backend<f32> for AVX2Backend {
         Tensor {
             data: Arc::new(data),
             shape: a.shape.clone(),
+            op: Op::Sub,
         }
     }
 
@@ -658,6 +678,7 @@ impl Backend<f32> for AVX2Backend {
         Tensor {
             data: Arc::new(data),
             shape: a.shape.clone(),
+            op: Op::Mul,
         }
     }
 }

@@ -10,7 +10,7 @@ use crate::{assert_dim, assert_numel};
 
 const MAX_DIM: usize = 4;
 
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(Copy, Clone, Debug, Eq, PartialEq)]
 pub struct Shape {
     // TODO: no heap allocs, use array of size 4;
     pub(crate) shape: [usize; MAX_DIM],
