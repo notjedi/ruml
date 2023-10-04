@@ -132,27 +132,3 @@ fn test_randn() {
         avec![0.712813, 0.85833144, -2.4362438, 0.16334426, -1.2750102, 1.287171]
     );
 }
-
-#[test]
-fn test_graph() {
-    use crate::{AVX2Backend, Backend};
-    use daggy::Dag;
-    use petgraph::dot::Dot;
-
-    let mut x = Tensor::<f32>::zeros(&[1, 784]).contiguous();
-    x.name = "x".into();
-    let mut y = Tensor::<f32>::ones(&[784, 128]).contiguous();
-    y.name = "y".into();
-    let mut feat_vec = AVX2Backend::matmul(&x, &y);
-    feat_vec.name = "feat_vec".into();
-
-    let mut dag = Dag::<Tensor<f32>, Op>::new();
-    let x = dag.add_node(x);
-    let y = dag.add_node(y);
-    let z = dag.add_node(feat_vec);
-    let _ = dag.add_edge(x, z, dag[z].op);
-    let _ = dag.add_edge(y, z, dag[z].op);
-
-    println!("{:?}", Dot::with_config(dag.graph(), &[]));
-    assert!(false);
-}

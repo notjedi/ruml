@@ -34,6 +34,7 @@ impl<T> Num for T where
 {
 }
 
+// TODO: this is of no use
 pub trait NumInt: PrimInt + Num {}
 impl<T> NumInt for T where T: PrimInt + Num {}
 
