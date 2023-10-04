@@ -1,5 +1,3 @@
-mod graph;
-mod graph_tensor;
 mod shape;
 pub use self::shape::{Shape, TensorIndexIterator};
 

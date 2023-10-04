@@ -6,6 +6,8 @@
 mod backend;
 mod ops;
 mod tensor;
+
+pub mod graph;
 pub mod types;
 
 pub use backend::*;

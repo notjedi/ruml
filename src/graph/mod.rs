@@ -1,8 +1,10 @@
+pub mod graph_tensor;
+
 use core::marker::PhantomData;
 use daggy::Dag;
 
-use super::graph_tensor::GraphTensor;
 use crate::{types::NumFloat, Backend, Op, Tensor};
+use graph_tensor::GraphTensor;
 
 pub struct Graph<T, U>
 where

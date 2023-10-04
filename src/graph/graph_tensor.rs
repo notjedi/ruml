@@ -1,6 +1,6 @@
 use daggy::{EdgeIndex, NodeIndex};
 
-use super::graph::Graph;
+use crate::graph::Graph;
 use crate::{types::NumFloat, Backend, Op, Tensor};
 
 pub struct GraphTensor<T, U>
@@ -23,6 +23,17 @@ where
 
     fn add_child(&self, child: Tensor<U>, op: Op) -> (EdgeIndex, NodeIndex) {
         unsafe { (*self.graph_ref).graph.add_child(self.id, op, child) }
+    }
+
+    pub fn matmul(&self, other: GraphTensor<T, U>) -> GraphTensor<T, U> {
+        let node = self.get_node_ref();
+        let other_node = other.get_node_ref();
+        let matmul_tensor = T::matmul(node, other_node);
+        let (_, idx) = self.add_child(matmul_tensor, Op::Todo);
+        GraphTensor {
+            id: idx,
+            graph_ref: self.graph_ref,
+        }
     }
 
     pub fn abs(&self) -> GraphTensor<T, U> {
