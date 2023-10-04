@@ -62,13 +62,7 @@ where
     T: Num,
 {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-        write!(
-            f,
-            "Tensor with shape: {:?} and stride: {:?} and data: {:?}",
-            self.shape.shape(),
-            self.shape.strides,
-            self.data.as_slice()
-        )
+        write!(f, "{}: {:?}", self.name, self.shape.shape(),)
     }
 }
 

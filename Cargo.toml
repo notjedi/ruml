@@ -12,7 +12,9 @@ keywords = ["tensor", "tensor-library", "machine-learning"]
 
 
 [dependencies]
-rayon = "1.7.0"
+rayon = "1.8"
+daggy = "0.8"
+petgraph = "0.6"
 wide = { version = "0.7", default-features = false }
 num-traits = { version = "0.2", default-features = false }
 rand_distr = { version = "0.4", default-features = false }
