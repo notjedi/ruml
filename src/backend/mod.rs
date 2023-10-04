@@ -13,11 +13,13 @@ where
     fn matmul(a: &Tensor<T>, b: &Tensor<T>) -> Tensor<T>;
     fn matmul_naive(a: &Tensor<T>, b: &Tensor<T>) -> Tensor<T>;
 
+    fn abs(tensor: &Tensor<T>) -> Tensor<T>;
     fn exp(tensor: &Tensor<T>) -> Tensor<T>;
     fn log2(tensor: &Tensor<T>) -> Tensor<T>;
     fn relu(tensor: &Tensor<T>) -> Tensor<T>;
     fn sqrt(tensor: &Tensor<T>) -> Tensor<T>;
     fn silu(tensor: &Tensor<T>) -> Tensor<T>;
+    fn square(tensor: &Tensor<T>) -> Tensor<T>;
     fn sigmoid(tensor: &Tensor<T>) -> Tensor<T>;
 
     fn sum(tensor: &Tensor<T>) -> T;

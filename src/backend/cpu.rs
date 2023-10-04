@@ -43,6 +43,11 @@ impl Backend<f32> for AVX2Backend {
         // numpy imple takes 60 secs = 17179869184 / 60 = 286331153 = 0.286331153 GFLOPs
         // theoretical we can do 2*N^3 compute in 0.079169904s = about 80ms
 
+        assert!(
+            a.is_contiguous() && b.is_contiguous(),
+            "tensors must be continguous"
+        );
+
         let a_row = a.shape()[0];
         let b_row = b.shape()[0];
         let a_col = a.shape()[1];
@@ -219,6 +224,29 @@ impl Backend<f32> for AVX2Backend {
         }
     }
 
+    fn abs(tensor: &Tensor<f32>) -> Tensor<f32> {
+        let mut data = AVec::<f32>::with_capacity(CACHELINE_ALIGN, tensor.data.len());
+        let (_, a_aligned, a_suffix) = tensor.data.as_simd::<{ Self::CHUNK_SIZE }>();
+
+        a_aligned.iter().for_each(|a_vec| {
+            a_vec
+                .abs()
+                .as_array()
+                .iter()
+                .for_each(|&elem| data.push(elem));
+        });
+        a_suffix.iter().for_each(|a_elem| {
+            data.push(a_elem.abs());
+        });
+
+        Tensor {
+            data: Arc::new(data),
+            shape: tensor.shape,
+            name: "abs".into(),
+            op: Op::Todo,
+        }
+    }
+
     fn exp(tensor: &Tensor<f32>) -> Tensor<f32> {
         let mut data = AVec::<f32>::with_capacity(CACHELINE_ALIGN, tensor.data.len());
         tensor
@@ -333,6 +361,29 @@ impl Backend<f32> for AVX2Backend {
             shape: tensor.shape.clone(),
             name: "silu".into(),
             op: Op::SiLU,
+        }
+    }
+
+    fn square(tensor: &Tensor<f32>) -> Tensor<f32> {
+        let mut data = AVec::<f32>::with_capacity(CACHELINE_ALIGN, tensor.data.len());
+        tensor
+            .data
+            .array_chunks::<{ Self::CHUNK_SIZE }>()
+            .for_each(|&chunk| {
+                // TODO: benchmark
+                // let square = chunk * chunk;
+                let square = wide::f32x8::from(chunk).powf(2.0);
+                square.to_array().into_iter().for_each(|val| data.push(val));
+            });
+        tensor.data[(data.len() / Self::CHUNK_SIZE) * Self::CHUNK_SIZE..]
+            .iter()
+            .for_each(|val| data.push(val.powi(2)));
+
+        Tensor {
+            data: Arc::new(data),
+            shape: tensor.shape,
+            name: "square".into(),
+            op: Op::Todo,
         }
     }
 
@@ -633,6 +684,10 @@ impl Backend<f32> for AVX2Backend {
     }
 
     fn add_elementwise(a: &Tensor<f32>, b: &Tensor<f32>) -> Tensor<f32> {
+        assert!(
+            a.is_contiguous() && b.is_contiguous(),
+            "tensors must be continguous"
+        );
         assert!(a.shape() == b.shape(), "len of both tensors should match");
 
         let mut data = AVec::<f32>::with_capacity(CACHELINE_ALIGN, a.data.len());
@@ -656,6 +711,10 @@ impl Backend<f32> for AVX2Backend {
     }
 
     fn sub_elementwise(a: &Tensor<f32>, b: &Tensor<f32>) -> Tensor<f32> {
+        assert!(
+            a.is_contiguous() && b.is_contiguous(),
+            "tensors must be continguous"
+        );
         assert!(a.shape() == b.shape(), "len of both tensors should match");
 
         let mut data = AVec::<f32>::with_capacity(CACHELINE_ALIGN, a.data.len());
@@ -679,6 +738,10 @@ impl Backend<f32> for AVX2Backend {
     }
 
     fn mul_elementwise(a: &Tensor<f32>, b: &Tensor<f32>) -> Tensor<f32> {
+        assert!(
+            a.is_contiguous() && b.is_contiguous(),
+            "tensors must be continguous"
+        );
         assert!(a.shape() == b.shape(), "len of both tensors should match");
 
         let mut data = AVec::<f32>::with_capacity(CACHELINE_ALIGN, a.data.len());
