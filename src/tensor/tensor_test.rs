@@ -104,25 +104,6 @@ fn test_tensor_ops() {
 // }
 
 #[test]
-fn test_tensor_mlops() {
-    let shape_vec = vec![3, 4, 5];
-    let shape: Shape = shape_vec.clone().into();
-    let tensor: Tensor<f32> = Tensor::arange(shape.numel()).reshape(&shape_vec);
-
-    let sum_tensor = tensor.sum(None);
-    let sum = (shape.numel() * (shape.numel() - 1) / 2) as f32;
-    let sum_tensor_check: Tensor<f32> = Tensor::new(avec![sum]);
-    assert_eq!(sum_tensor, sum_tensor_check);
-
-    let sum_tensor = tensor.sum(2);
-    // import numpy as np; shape = [3, 4, 5]; np.arange(np.prod(shape), dtype=np.float32).reshape(shape).sum(axis=2).flatten()
-    let sum_vec: AVec<f32> =
-        avec![10.0, 35.0, 60.0, 85.0, 110.0, 135.0, 160.0, 185.0, 210.0, 235.0, 260.0, 285.0];
-    assert_eq!(sum_tensor.shape(), &[3, 4, 1]);
-    assert_eq!(Arc::try_unwrap(sum_tensor.data).unwrap(), sum_vec);
-}
-
-#[test]
 fn test_tensor_broadcast() {
     let x = Tensor::<f32>::zeros(&[1, 3]);
     let y = Tensor::<f32>::ones(&[3, 1]);

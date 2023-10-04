@@ -262,7 +262,7 @@ impl Backend<f32> for AVX2Backend {
 
         Tensor {
             data: Arc::new(data),
-            shape: tensor.shape.clone(),
+            shape: tensor.shape,
             name: "exp".into(),
             op: Op::Todo,
         }
@@ -283,7 +283,7 @@ impl Backend<f32> for AVX2Backend {
 
         Tensor {
             data: Arc::new(data),
-            shape: tensor.shape.clone(),
+            shape: tensor.shape,
             name: "log2".into(),
             op: Op::Todo,
         }
@@ -312,7 +312,7 @@ impl Backend<f32> for AVX2Backend {
 
         Tensor {
             data: Arc::new(data),
-            shape: tensor.shape.clone(),
+            shape: tensor.shape,
             name: "relu".into(),
             op: Op::Todo,
         }
@@ -332,7 +332,7 @@ impl Backend<f32> for AVX2Backend {
 
         Tensor {
             data: Arc::new(data),
-            shape: tensor.shape.clone(),
+            shape: tensor.shape,
             name: "sqrt".into(),
             op: Op::Todo,
         }
@@ -358,7 +358,7 @@ impl Backend<f32> for AVX2Backend {
 
         Tensor {
             data: Arc::new(data),
-            shape: tensor.shape.clone(),
+            shape: tensor.shape,
             name: "silu".into(),
             op: Op::SiLU,
         }
@@ -406,14 +406,14 @@ impl Backend<f32> for AVX2Backend {
 
         Tensor {
             data: Arc::new(data),
-            shape: tensor.shape.clone(),
+            shape: tensor.shape,
             name: "sigmoid".into(),
             op: Op::Todo,
         }
     }
 
     fn sum(tensor: &Tensor<f32>) -> f32 {
-        debug_assert!(
+        assert!(
             tensor.is_contiguous(),
             "vector instructions are only supported for contiguous tensors"
         );
@@ -425,7 +425,7 @@ impl Backend<f32> for AVX2Backend {
     }
 
     fn sum_rayon(tensor: &Tensor<f32>) -> f32 {
-        debug_assert!(
+        assert!(
             tensor.is_contiguous(),
             "vector instructions are only supported for contiguous tensors"
         );
@@ -437,7 +437,7 @@ impl Backend<f32> for AVX2Backend {
         // i'm not really satisfied w this code, kinda feels messy and easy to break also it
         // involves a lot of copying data to simd registers, so i'm kinda skeptical about this one
         // and we'll have to see.
-        debug_assert!(
+        assert!(
             tensor.is_contiguous(),
             "vector instructions are only supported for contiguous tensors"
         );
@@ -614,7 +614,7 @@ impl Backend<f32> for AVX2Backend {
 
         Tensor {
             data: Arc::new(data),
-            shape: a.shape.clone(),
+            shape: a.shape,
             name: "add_scalar".into(),
             op: Op::Add,
         }
@@ -635,7 +635,7 @@ impl Backend<f32> for AVX2Backend {
 
         Tensor {
             data: Arc::new(data),
-            shape: a.shape.clone(),
+            shape: a.shape,
             name: "sub_scalar".into(),
             op: Op::Sub,
         }
@@ -656,7 +656,7 @@ impl Backend<f32> for AVX2Backend {
 
         Tensor {
             data: Arc::new(data),
-            shape: a.shape.clone(),
+            shape: a.shape,
             name: "mul_scalar".into(),
             op: Op::Mul,
         }
@@ -677,7 +677,7 @@ impl Backend<f32> for AVX2Backend {
 
         Tensor {
             data: Arc::new(data),
-            shape: a.shape.clone(),
+            shape: a.shape,
             name: "div_scalar".into(),
             op: Op::Div,
         }
@@ -704,7 +704,7 @@ impl Backend<f32> for AVX2Backend {
 
         Tensor {
             data: Arc::new(data),
-            shape: a.shape.clone(),
+            shape: a.shape,
             name: "add_elementwise".into(),
             op: Op::Add,
         }
@@ -731,7 +731,7 @@ impl Backend<f32> for AVX2Backend {
 
         Tensor {
             data: Arc::new(data),
-            shape: a.shape.clone(),
+            shape: a.shape,
             name: "sub_elementwise".into(),
             op: Op::Sub,
         }
@@ -758,7 +758,7 @@ impl Backend<f32> for AVX2Backend {
 
         Tensor {
             data: Arc::new(data),
-            shape: a.shape.clone(),
+            shape: a.shape,
             name: "mul_elementwise".into(),
             op: Op::Mul,
         }

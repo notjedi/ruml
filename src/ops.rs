@@ -7,8 +7,9 @@
 
 use core::fmt::Debug;
 
-#[derive(Clone, Copy, Eq, PartialEq)]
+#[derive(Clone, Copy, Default, Eq, PartialEq)]
 pub enum Op {
+    #[default]
     Noop,
     Todo,
 
@@ -43,12 +44,6 @@ pub enum Op {
     Reshape,
     Transpose,
     View,
-}
-
-impl Default for Op {
-    fn default() -> Self {
-        Op::Noop
-    }
 }
 
 impl Debug for Op {

@@ -169,7 +169,7 @@ impl Shape {
         let mut reduced_shape = Shape::new(&reduced_shape[..self.ndim]);
         reduced_shape.strides[dim] = 1;
 
-        let mut stride_shape = reduced_shape.clone();
+        let mut stride_shape = reduced_shape;
         stride_shape.strides[dim] = 0;
         (reduced_shape, stride_shape)
     }
