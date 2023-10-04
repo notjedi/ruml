@@ -2,7 +2,7 @@ use aligned_vec::{avec, AVec};
 use rayon::prelude::{IntoParallelRefIterator, ParallelIterator};
 
 use super::Backend;
-use crate::{Op, Shape, Tensor, CACHELINE_ALIGN};
+use crate::{Shape, Tensor, CACHELINE_ALIGN};
 use alloc::sync::Arc;
 use core::ops::Add;
 use core::simd::{f32x8, SimdFloat};
@@ -191,7 +191,6 @@ impl Backend<f32> for AVX2Backend {
             data: Arc::new(data),
             shape: new_shape,
             name: "matmul".into(),
-            op: Op::Todo,
         }
     }
 
@@ -220,7 +219,6 @@ impl Backend<f32> for AVX2Backend {
             data: Arc::new(data),
             shape: new_shape,
             name: "matmul_naive".into(),
-            op: Op::Todo,
         }
     }
 
@@ -243,7 +241,6 @@ impl Backend<f32> for AVX2Backend {
             data: Arc::new(data),
             shape: tensor.shape,
             name: "abs".into(),
-            op: Op::Todo,
         }
     }
 
@@ -264,7 +261,6 @@ impl Backend<f32> for AVX2Backend {
             data: Arc::new(data),
             shape: tensor.shape,
             name: "exp".into(),
-            op: Op::Todo,
         }
     }
 
@@ -285,7 +281,6 @@ impl Backend<f32> for AVX2Backend {
             data: Arc::new(data),
             shape: tensor.shape,
             name: "log2".into(),
-            op: Op::Todo,
         }
     }
 
@@ -314,7 +309,6 @@ impl Backend<f32> for AVX2Backend {
             data: Arc::new(data),
             shape: tensor.shape,
             name: "relu".into(),
-            op: Op::Todo,
         }
     }
 
@@ -334,7 +328,6 @@ impl Backend<f32> for AVX2Backend {
             data: Arc::new(data),
             shape: tensor.shape,
             name: "sqrt".into(),
-            op: Op::Todo,
         }
     }
 
@@ -360,7 +353,6 @@ impl Backend<f32> for AVX2Backend {
             data: Arc::new(data),
             shape: tensor.shape,
             name: "silu".into(),
-            op: Op::SiLU,
         }
     }
 
@@ -383,7 +375,6 @@ impl Backend<f32> for AVX2Backend {
             data: Arc::new(data),
             shape: tensor.shape,
             name: "square".into(),
-            op: Op::Todo,
         }
     }
 
@@ -408,7 +399,6 @@ impl Backend<f32> for AVX2Backend {
             data: Arc::new(data),
             shape: tensor.shape,
             name: "sigmoid".into(),
-            op: Op::Todo,
         }
     }
 
@@ -479,7 +469,6 @@ impl Backend<f32> for AVX2Backend {
                 data: Arc::new(data),
                 shape: new_shape,
                 name: "sum".into(),
-                op: Op::Sum,
             }
         }
 
@@ -505,7 +494,6 @@ impl Backend<f32> for AVX2Backend {
                     data: Arc::new(data),
                     shape: new_shape,
                     name: "sum".into(),
-                    op: Op::Sum,
                 }
             }
             1 => {
@@ -553,7 +541,6 @@ impl Backend<f32> for AVX2Backend {
                     data: Arc::new(data),
                     shape: new_shape,
                     name: "sum".into(),
-                    op: Op::Sum,
                 }
             }
             2 => {
@@ -590,7 +577,6 @@ impl Backend<f32> for AVX2Backend {
                         data: Arc::new(data),
                         shape: new_shape,
                         name: "sum".into(),
-                        op: Op::Sum,
                     }
                 }
             }
@@ -616,7 +602,6 @@ impl Backend<f32> for AVX2Backend {
             data: Arc::new(data),
             shape: a.shape,
             name: "add_scalar".into(),
-            op: Op::Add,
         }
     }
 
@@ -637,7 +622,6 @@ impl Backend<f32> for AVX2Backend {
             data: Arc::new(data),
             shape: a.shape,
             name: "sub_scalar".into(),
-            op: Op::Sub,
         }
     }
 
@@ -658,7 +642,6 @@ impl Backend<f32> for AVX2Backend {
             data: Arc::new(data),
             shape: a.shape,
             name: "mul_scalar".into(),
-            op: Op::Mul,
         }
     }
 
@@ -679,7 +662,6 @@ impl Backend<f32> for AVX2Backend {
             data: Arc::new(data),
             shape: a.shape,
             name: "div_scalar".into(),
-            op: Op::Div,
         }
     }
 
@@ -706,7 +688,6 @@ impl Backend<f32> for AVX2Backend {
             data: Arc::new(data),
             shape: a.shape,
             name: "add_elementwise".into(),
-            op: Op::Add,
         }
     }
 
@@ -733,7 +714,6 @@ impl Backend<f32> for AVX2Backend {
             data: Arc::new(data),
             shape: a.shape,
             name: "sub_elementwise".into(),
-            op: Op::Sub,
         }
     }
 
@@ -760,7 +740,6 @@ impl Backend<f32> for AVX2Backend {
             data: Arc::new(data),
             shape: a.shape,
             name: "mul_elementwise".into(),
-            op: Op::Mul,
         }
     }
 }
