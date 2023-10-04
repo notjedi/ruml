@@ -1,11 +1,7 @@
 mod shape;
 pub use self::shape::{Shape, TensorIndexIterator};
 
-use crate::{
-    assert_dim, assert_numel,
-    types::{Num, NumFloat, NumInt},
-    CACHELINE_ALIGN,
-};
+use crate::{assert_dim, assert_numel, types::NumFloat, CACHELINE_ALIGN};
 use aligned_vec::{avec, AVec};
 use alloc::vec;
 use alloc::{sync::Arc, vec::Vec};
@@ -14,13 +10,14 @@ use core::{
     fmt::{Debug, Display},
     ops::{Add, Div, Mul, Neg, Sub},
 };
+use num_traits::Float;
 use rand::Rng;
 use rand_distr::{Distribution, StandardNormal};
 
 #[derive(Eq, PartialEq)]
 pub struct Tensor<T>
 where
-    T: Num,
+    T: NumFloat,
 {
     pub(crate) data: Arc<AVec<T>>,
     pub(crate) name: String,
@@ -29,7 +26,7 @@ where
 
 impl<T> Clone for Tensor<T>
 where
-    T: Num,
+    T: NumFloat,
 {
     fn clone(&self) -> Self {
         Self {
@@ -47,7 +44,7 @@ where
 
 impl<T> Display for Tensor<T>
 where
-    T: Num,
+    T: NumFloat,
 {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         write!(f, "Tensor with shape {:?}", self.shape.shape())
@@ -56,7 +53,7 @@ where
 
 impl<T> Debug for Tensor<T>
 where
-    T: Num,
+    T: NumFloat,
 {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         write!(f, "{}: {:?}", self.name, self.shape.shape(),)
@@ -67,7 +64,7 @@ macro_rules! impl_ops {
     ($op_trait:ident, $op_fn:ident, $op:tt, $name:literal) => {
         impl<T> $op_trait<&Tensor<T>> for &Tensor<T>
         where
-            T: Num,
+            T: NumFloat,
         {
             type Output = Tensor<T>;
 
@@ -78,7 +75,7 @@ macro_rules! impl_ops {
 
         impl<T> $op_trait<&Tensor<T>> for Tensor<T>
         where
-            T: Num,
+            T: NumFloat,
         {
             type Output = Tensor<T>;
 
@@ -89,7 +86,7 @@ macro_rules! impl_ops {
 
         impl<T> $op_trait<Tensor<T>> for &Tensor<T>
         where
-            T: Num,
+            T: NumFloat,
         {
             type Output = Tensor<T>;
 
@@ -100,7 +97,7 @@ macro_rules! impl_ops {
 
         impl<T> $op_trait<Tensor<T>> for Tensor<T>
         where
-            T: Num,
+            T: NumFloat,
         {
             type Output = Tensor<T>;
 
@@ -111,7 +108,7 @@ macro_rules! impl_ops {
 
         impl<T> $op_trait<T> for Tensor<T>
         where
-            T: Num,
+            T: NumFloat,
         {
             type Output = Tensor<T>;
 
@@ -128,7 +125,7 @@ macro_rules! impl_ops {
 
         impl<T> $op_trait<T> for &Tensor<T>
         where
-            T: Num,
+            T: NumFloat,
         {
             type Output = Tensor<T>;
 
@@ -152,7 +149,7 @@ impl_ops!(Sub, sub, -, "sub");
 impl_ops!(Mul, mul, *, "mul");
 impl_ops!(Div, div, /, "div");
 
-impl<T: Num> Neg for Tensor<T> {
+impl<T: NumFloat> Neg for Tensor<T> {
     type Output = Tensor<T>;
 
     fn neg(self) -> Tensor<T> {
@@ -166,7 +163,7 @@ impl<T: Num> Neg for Tensor<T> {
     }
 }
 
-impl<T: Num> Neg for &Tensor<T> {
+impl<T: NumFloat> Neg for &Tensor<T> {
     type Output = Tensor<T>;
 
     fn neg(self) -> Tensor<T> {
@@ -200,7 +197,7 @@ impl<T: Num> Neg for &Tensor<T> {
 
 impl<T> Tensor<T>
 where
-    T: Num,
+    T: NumFloat,
 {
     pub fn new(data: AVec<T>) -> Self {
         let shape = Shape {
@@ -469,7 +466,7 @@ where
 
     pub fn as_type<S>(&self) -> Tensor<S>
     where
-        S: Num,
+        S: NumFloat,
     {
         // TODO: write tests
         let data = AVec::from_iter(
@@ -592,7 +589,17 @@ where
     {
         // TODO: write tests
         match dim.into() {
-            Some(dim) => self.reduce(T::min_value(), dim, |x, y| if x > y { x } else { y }),
+            Some(dim) => self.reduce(
+                <T as Float>::min_value(),
+                dim,
+                |x, y| {
+                    if x > y {
+                        x
+                    } else {
+                        y
+                    }
+                },
+            ),
             None => {
                 let sum = avec![self.data.iter().fold(T::zero(), |acc, &x| acc + x)];
                 // TODO: set op
@@ -607,7 +614,17 @@ where
     {
         // TODO: write tests
         match dim.into() {
-            Some(dim) => self.reduce(T::max_value(), dim, |x, y| if x < y { x } else { y }),
+            Some(dim) => self.reduce(
+                <T as Float>::max_value(),
+                dim,
+                |x, y| {
+                    if x < y {
+                        x
+                    } else {
+                        y
+                    }
+                },
+            ),
             None => {
                 let sum = avec![self.data.iter().fold(T::zero(), |acc, &x| acc + x)];
                 // TODO: set op
@@ -615,12 +632,7 @@ where
             }
         }
     }
-}
 
-impl<T> Tensor<T>
-where
-    T: NumFloat,
-{
     pub fn exp(&self) -> Self {
         self.map(|x| x.exp())
     }
@@ -671,18 +683,9 @@ where
     }
 }
 
-impl<T> Tensor<T>
-where
-    T: NumInt,
-{
-    pub fn pow(&self, pow: u32) -> Self {
-        self.map(|x| x.pow(pow))
-    }
-}
-
 impl<'a, T> IntoIterator for &'a Tensor<T>
 where
-    T: Num,
+    T: NumFloat,
 {
     type Item = T;
     type IntoIter = TensorIterator<'a, T>;
@@ -698,7 +701,7 @@ where
 #[derive(Debug)]
 pub struct TensorIterator<'a, T>
 where
-    T: Num,
+    T: NumFloat,
 {
     tensor: &'a Tensor<T>,
     index_iter: TensorIndexIterator<'a>,
@@ -706,7 +709,7 @@ where
 
 impl<'a, T> Iterator for TensorIterator<'a, T>
 where
-    T: Num,
+    T: NumFloat,
 {
     type Item = T;
 
@@ -721,7 +724,7 @@ where
 #[derive(Debug)]
 pub struct DimIterator<'a, T>
 where
-    T: Num,
+    T: NumFloat,
 {
     tensor: &'a Tensor<T>,
     iter_dim: usize,
@@ -730,7 +733,7 @@ where
 
 impl<'a, T> Iterator for DimIterator<'a, T>
 where
-    T: Num,
+    T: NumFloat,
 {
     type Item = Tensor<T>;
 
