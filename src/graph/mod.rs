@@ -61,8 +61,6 @@ where
     pub fn randn<R>(&mut self, shape: &[usize], rng: &mut R) -> GraphTensor<T, U>
     where
         R: Rng,
-        // do i need to include ?Sized for R like this: R: Rng + ?Sized,
-        // TODO : what does this bound mean?
         StandardNormal: Distribution<U>,
     {
         let tensor = Tensor::randn(shape, rng);

@@ -410,7 +410,6 @@ impl Backend<f32> for AVX2Backend {
         let (_, aligned, suffix) = tensor.data.as_simd::<{ Self::CHUNK_SIZE }>();
         let acc = f32x8::splat(0.0);
         let acc = aligned.iter().fold(acc, f32x8::add);
-        // TODO: set op
         acc.reduce_sum() + suffix.iter().sum::<f32>()
     }
 
@@ -419,7 +418,6 @@ impl Backend<f32> for AVX2Backend {
             tensor.is_contiguous(),
             "vector instructions are only supported for contiguous tensors"
         );
-        // TODO: set op
         tensor.data.par_iter().sum::<f32>()
     }
 

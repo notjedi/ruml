@@ -181,7 +181,6 @@ where
     }
 
     pub fn test_sum_axis() {
-        // TODO: test on more shapes and different dims
         let shape = [2, 3, 4, 5];
         let len = shape.iter().product();
         let tensor = Tensor::<U>::arange(len).reshape(&shape);

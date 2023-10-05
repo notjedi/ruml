@@ -8,11 +8,10 @@ use alloc::vec::Vec;
 
 use crate::{assert_dim, assert_numel};
 
-const MAX_DIM: usize = 4;
+pub(crate) const MAX_DIM: usize = 4;
 
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]
 pub struct Shape {
-    // TODO: no heap allocs, use array of size 4;
     pub(crate) shape: [usize; MAX_DIM],
     pub(crate) strides: [usize; MAX_DIM],
     pub(crate) ndim: usize,
@@ -98,7 +97,6 @@ impl Shape {
 
     #[inline]
     pub fn numel(&self) -> usize {
-        // TODO: make sure shape does not have 0's
         self.shape().iter().product()
     }
 
@@ -115,7 +113,6 @@ impl Shape {
     }
 
     pub fn get_buffer_idx(&self, index: &[usize]) -> usize {
-        // TODO
         assert_eq!(
             index.len(),
             self.ndim,
@@ -183,7 +180,6 @@ impl Shape {
             .iter()
             .zip(self.strides().iter())
             .for_each(|(&dim, &stride)| {
-                // TODO: should i also check if dim != 0
                 if dim != 1 {
                     shape[ndim] = dim;
                     strides[ndim] = stride;
@@ -211,7 +207,6 @@ impl Shape {
         &self,
         new_shape: &[usize],
     ) -> Result<Self, String> {
-        // TODO: convert fn to array API
         // function to check if tensor can be reshaped without copying
         // see https://github.com/numpy/numpy/blob/ac3baf5e229a502b43042c570d4d79e92702669a/numpy/core/src/multiarray/shape.c#L371
         assert_numel!(self.numel(), new_shape.iter().product(), new_shape);
@@ -359,13 +354,6 @@ impl Shape {
             perm_shape.iter().sum(),
             "all dims must be specified exactly once"
         );
-        // TODO: do we need this check? isn't it redundant as we are already checking for numels in
-        // the above assert
-        // assert!(
-        //     !perm_shape.iter().any(|&x| x >= self.ndim),
-        //     "All dimensions should be less than {}",
-        //     self.ndim
-        // );
         let mut shape = [0; MAX_DIM];
         let mut strides = [0; MAX_DIM];
         perm_shape.iter().enumerate().for_each(|(i, &from)| {

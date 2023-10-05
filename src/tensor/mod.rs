@@ -1,9 +1,7 @@
 mod shape;
 pub use self::shape::{Shape, TensorIndexIterator};
 
-use crate::{assert_dim, assert_numel, types::NumFloat, CACHELINE_ALIGN};
 use aligned_vec::{avec, AVec};
-use alloc::vec;
 use alloc::{sync::Arc, vec::Vec};
 use core::{
     assert_eq,
@@ -13,6 +11,9 @@ use core::{
 use num_traits::Float;
 use rand::Rng;
 use rand_distr::{Distribution, StandardNormal};
+
+use self::shape::MAX_DIM;
+use crate::{assert_dim, assert_numel, types::NumFloat, CACHELINE_ALIGN};
 
 #[derive(Eq, PartialEq)]
 pub struct Tensor<T>
@@ -30,14 +31,9 @@ where
 {
     fn clone(&self) -> Self {
         Self {
-            // https://stackoverflow.com/a/55750742
-            // TODO: is this right?
-            // TODO: remove shallow clone
-            // data: Arc::clone(&self.data),
-            // shape: self.shape,
-            data: Arc::new((*self.data).clone()),
-            name: self.name.clone(),
+            data: Arc::clone(&self.data),
             shape: self.shape,
+            name: self.name.clone(),
         }
     }
 }
@@ -267,8 +263,6 @@ where
     pub fn randn<R>(shape: &[usize], rng: &mut R) -> Self
     where
         R: Rng,
-        // do i need to include ?Sized for R like this: R: Rng + ?Sized,
-        // TODO : what does this bound mean?
         StandardNormal: Distribution<T>,
     {
         let shape: Shape = shape.into();
@@ -351,11 +345,13 @@ where
     }
 
     #[inline]
-    pub fn shallow_clone(&self) -> Self {
+    /// Clones the underlying data instead of using `Arc::clone`
+    pub fn deep_clone(&self) -> Self {
         Self {
-            data: Arc::clone(&self.data),
-            shape: self.shape,
+            // https://stackoverflow.com/a/55750742
+            data: Arc::new((*self.data).clone()),
             name: self.name.clone(),
+            shape: self.shape,
         }
     }
 
@@ -396,7 +392,7 @@ where
     pub fn T(&self) -> Self {
         let mut new_shape = self.shape.shape;
         new_shape.reverse();
-        self.permute(&new_shape[4 - self.shape.ndim..])
+        self.permute(&new_shape[MAX_DIM - self.shape.ndim..])
     }
 
     pub fn permute(&self, dims: &[usize]) -> Self {
@@ -468,7 +464,6 @@ where
     where
         S: NumFloat,
     {
-        // TODO: write tests
         let data = AVec::from_iter(
             CACHELINE_ALIGN,
             self.data.iter().map(|&x| num_traits::cast(x).unwrap()),
@@ -571,13 +566,10 @@ where
         S: Into<Option<usize>>,
     {
         match dim.into() {
-            // TODO: which one should i  use?
-            // Some(dim) => self.reduce(T::zero(), dim, std::ops::Add::add),
-            Some(dim) => self.reduce(T::zero(), dim, |x, y| x + y),
+            Some(dim) => self.reduce(T::zero(), dim, std::ops::Add::add),
             None => {
                 // BUG: wont' work for non-contiguous tensors
                 let sum = avec![self.data.iter().fold(T::zero(), |acc, &x| acc + x)];
-                // TODO: set op
                 Self::new(sum)
             }
         }
@@ -602,7 +594,6 @@ where
             ),
             None => {
                 let sum = avec![self.data.iter().fold(T::zero(), |acc, &x| acc + x)];
-                // TODO: set op
                 Self::new(sum)
             }
         }
@@ -627,7 +618,6 @@ where
             ),
             None => {
                 let sum = avec![self.data.iter().fold(T::zero(), |acc, &x| acc + x)];
-                // TODO: set op
                 Self::new(sum)
             }
         }
