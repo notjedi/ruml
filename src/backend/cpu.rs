@@ -6,7 +6,6 @@ use crate::{Shape, Tensor, CACHELINE_ALIGN};
 use alloc::sync::Arc;
 use core::ops::Add;
 use core::simd::{f32x8, SimdFloat};
-use std::simd::StdFloat;
 
 const CACHE_LINE_F32: usize = 16;
 
@@ -65,6 +64,14 @@ impl Backend<f32> for AVX2Backend {
         const SIZE: usize = 3;
         // const SIZE: usize = 4;
 
+        let get_wide_array = || -> [wide::f32x8; 2] { [wide::f32x8::ZERO; 2] };
+        let cast_wide_to_array = |simd_array: [wide::f32x8; 2]| -> [f32; 16] {
+            let mut array = [0.0_f32; 16];
+            array[..8].copy_from_slice(&simd_array[0].to_array());
+            array[8..].copy_from_slice(&simd_array[1].to_array());
+            return array;
+        };
+
         for i in (0..((a_row / SIZE) * SIZE)).step_by(SIZE) {
             let row_0 = &a.data[i * a_col..i * a_col + a_col];
             let row_1 = &a.data[(i + 1) * a_col..(i + 1) * a_col + a_col];
@@ -72,14 +79,10 @@ impl Backend<f32> for AVX2Backend {
             // let row_3 = &a.data[(i + 3) * a_col..(i + 3) * a_col + a_col];
 
             for j in (0..num_iters).map(|x| x * CACHE_LINE_F32) {
-                let mut buffer_0 = AlignedArray([0.0_f32; CACHE_LINE_F32]);
-                let (_, aligned_0, _) = buffer_0.0.as_simd_mut::<{ Self::CHUNK_SIZE }>();
-                let mut buffer_1 = AlignedArray([0.0_f32; CACHE_LINE_F32]);
-                let (_, aligned_1, _) = buffer_1.0.as_simd_mut::<{ Self::CHUNK_SIZE }>();
-                let mut buffer_2 = AlignedArray([0.0_f32; CACHE_LINE_F32]);
-                let (_, aligned_2, _) = buffer_2.0.as_simd_mut::<{ Self::CHUNK_SIZE }>();
-                // let mut buffer_3 = AlignedArray([0.0_f32; CACHE_LINE_F32]);
-                // let (_, aligned_3, _) = buffer_3.0.as_simd_mut::<{ Self::CHUNK_SIZE }>();
+                let mut aligned_0 = get_wide_array();
+                let mut aligned_1 = get_wide_array();
+                let mut aligned_2 = get_wide_array();
+                // let mut aligned_3 = get_wide_array();
 
                 row_0
                     .iter()
@@ -89,10 +92,10 @@ impl Backend<f32> for AVX2Backend {
                     .enumerate()
                     // .for_each(|(k, (((&elem_0, &elem_1), &elem_2), &elem_3))| {
                     .for_each(|(k, ((&elem_0, &elem_1), &elem_2))| {
-                        let elem_0_simd = f32x8::splat(elem_0);
-                        let elem_1_simd = f32x8::splat(elem_1);
-                        let elem_2_simd = f32x8::splat(elem_2);
-                        // let elem_3_simd = f32x8::splat(elem_3);
+                        let elem_0_simd = wide::f32x8::splat(elem_0);
+                        let elem_1_simd = wide::f32x8::splat(elem_1);
+                        let elem_2_simd = wide::f32x8::splat(elem_2);
+                        // let elem_3_simd = wide::f32x8::splat(elem_3);
                         let col = &b.data[(k * b_col) + j..(k * b_col) + j + CACHE_LINE_F32];
 
                         aligned_0
@@ -104,7 +107,7 @@ impl Backend<f32> for AVX2Backend {
                             .for_each(
                                 // |((((buf_0_mut, buf_1_mut), buf_2_mut), buf_3_mut), &col_chunk)| {
                                 |(((buf_0_mut, buf_1_mut), buf_2_mut), &col_chunk)| {
-                                    let col_chunk_simd = f32x8::from_array(col_chunk);
+                                    let col_chunk_simd = wide::f32x8::from(col_chunk);
                                     *buf_0_mut = elem_0_simd.mul_add(col_chunk_simd, *buf_0_mut);
                                     *buf_1_mut = elem_1_simd.mul_add(col_chunk_simd, *buf_1_mut);
                                     *buf_2_mut = elem_2_simd.mul_add(col_chunk_simd, *buf_2_mut);
@@ -114,16 +117,16 @@ impl Backend<f32> for AVX2Backend {
                     });
 
                 data[(i * b_col) + j..(i * b_col) + j + CACHE_LINE_F32]
-                    .copy_from_slice(buffer_0.0.as_slice());
+                    .copy_from_slice(cast_wide_to_array(aligned_0).as_slice());
 
                 data[((i + 1) * b_col) + j..((i + 1) * b_col) + j + CACHE_LINE_F32]
-                    .copy_from_slice(buffer_1.0.as_slice());
+                    .copy_from_slice(cast_wide_to_array(aligned_1).as_slice());
 
                 data[((i + 2) * b_col) + j..((i + 2) * b_col) + j + CACHE_LINE_F32]
-                    .copy_from_slice(buffer_2.0.as_slice());
+                    .copy_from_slice(cast_wide_to_array(aligned_2).as_slice());
 
                 // data[((i + 3) * b_col) + j..((i + 3) * b_col) + j + CACHE_LINE_F32]
-                //     .copy_from_slice(buffer_3.0.as_slice());
+                //     .copy_from_slice(cast_wide_to_array(aligned_3).as_slice());
             }
 
             // let rows = [row_0, row_1, row_2, row_3];
@@ -152,23 +155,22 @@ impl Backend<f32> for AVX2Backend {
             (a_row - row_rem..a_row).for_each(|i| {
                 let row = &a.data[i * a_col..i * a_col + a_col];
                 for j in (0..num_iters).map(|x| x * CACHE_LINE_F32) {
-                    let mut buffer = AlignedArray([0.0_f32; CACHE_LINE_F32]);
-                    let (_, aligned, _) = buffer.0.as_simd_mut::<{ Self::CHUNK_SIZE }>();
+                    let mut aligned = get_wide_array();
 
                     row.iter().enumerate().for_each(|(k, &elem)| {
-                        let elem_simd = f32x8::splat(elem);
+                        let elem_simd = wide::f32x8::splat(elem);
                         let col = &b.data[(k * b_col) + j..(k * b_col) + j + CACHE_LINE_F32];
 
                         aligned.iter_mut().zip(col.array_chunks::<8>()).for_each(
                             |(buf_mut, &col_chunk)| {
-                                let col_chunk_simd = f32x8::from_array(col_chunk);
+                                let col_chunk_simd = wide::f32x8::from(col_chunk);
                                 *buf_mut = elem_simd.mul_add(col_chunk_simd, *buf_mut);
                             },
                         );
                     });
 
                     data[(i * b_col) + j..(i * b_col) + j + CACHE_LINE_F32]
-                        .copy_from_slice(buffer.0.as_slice());
+                        .copy_from_slice(cast_wide_to_array(aligned).as_slice());
                 }
 
                 let mut buffer = [0.0_f32; CACHE_LINE_F32];
@@ -314,15 +316,19 @@ impl Backend<f32> for AVX2Backend {
 
     fn sqrt(tensor: &Tensor<f32>) -> Tensor<f32> {
         let mut data = AVec::<f32>::with_capacity(CACHELINE_ALIGN, tensor.data.len());
-        let (_, aligned, suffix) = tensor.data.as_simd::<{ Self::CHUNK_SIZE }>();
-
-        aligned.iter().for_each(|simd_chunk| {
-            let sqrt = simd_chunk.sqrt();
-            sqrt.as_array().iter().for_each(|&elem| data.push(elem));
-        });
-        suffix.iter().for_each(|elem| {
-            data.push(elem.sqrt());
-        });
+        tensor
+            .data
+            .array_chunks::<{ Self::CHUNK_SIZE }>()
+            .for_each(|&chunk| {
+                let chunk_simd = wide::f32x8::from(chunk);
+                let sqrt = chunk_simd.sqrt();
+                sqrt.to_array().into_iter().for_each(|val| data.push(val));
+            });
+        tensor.data[(data.len() / Self::CHUNK_SIZE) * Self::CHUNK_SIZE..]
+            .iter()
+            .for_each(|val| {
+                data.push(val.sqrt());
+            });
 
         Tensor {
             data: Arc::new(data),
