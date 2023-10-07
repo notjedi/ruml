@@ -566,9 +566,9 @@ where
         S: Into<Option<usize>>,
     {
         match dim.into() {
-            Some(dim) => self.reduce(T::zero(), dim, std::ops::Add::add),
+            Some(dim) => self.reduce(T::zero(), dim, Add::add),
             None => {
-                // BUG: wont' work for non-contiguous tensors
+                // BUG: won't work for non-contiguous tensors
                 let sum = avec![self.data.iter().fold(T::zero(), |acc, &x| acc + x)];
                 Self::new(sum)
             }

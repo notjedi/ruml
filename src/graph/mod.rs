@@ -1,10 +1,10 @@
 mod graph_tensor;
 pub use graph_tensor::GraphTensor;
-use rand::Rng;
-use rand_distr::{Distribution, StandardNormal};
 
 use core::marker::PhantomData;
 use daggy::Dag;
+use rand::Rng;
+use rand_distr::{Distribution, StandardNormal};
 
 use crate::{types::NumFloat, Backend, Op, Tensor};
 

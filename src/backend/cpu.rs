@@ -11,9 +11,6 @@ const CACHE_LINE_F32: usize = 16;
 
 pub struct AVX2Backend;
 
-#[repr(align(32))]
-struct AlignedArray<const N: usize>([f32; N]);
-
 impl Backend<f32> for AVX2Backend {
     const CHUNK_SIZE: usize = 8;
 
