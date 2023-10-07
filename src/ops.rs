@@ -11,15 +11,15 @@ use core::fmt::Debug;
 pub enum Op {
     #[default]
     Noop,
-    Todo,
 
     // UnaryOps
     Abs,
-    Copy,
+    Exp,
+    Log,
     Negate,
-    None,
+    Sqrt,
     Square,
-    SquareRoot,
+    Sum,
 
     // BinaryOps
     Add,
@@ -28,15 +28,15 @@ pub enum Op {
     Sub,
 
     // MlOps
-    Dot,
     GeLU,
+    MatMul,
     Mean,
     Norm,
     ReLU,
     Scale,
     SiLU,
+    Sigmoid,
     Softmax,
-    Sum,
 
     // ShapeOps
     Expand,
