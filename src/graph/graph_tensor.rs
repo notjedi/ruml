@@ -66,37 +66,6 @@ where
         }
     }
 
-    pub fn sqrt(&self) -> GraphTensor<T, U> {
-        let node = self.get_node_ref();
-        let sqrt_tensor = T::sqrt(node);
-        let (_, idx) = self.add_child(sqrt_tensor, Op::Sqrt);
-        GraphTensor {
-            id: idx,
-            graph_ref: self.graph_ref,
-        }
-    }
-
-    pub fn square(&self) -> GraphTensor<T, U> {
-        let node = self.get_node_ref();
-        let square_tensor = T::square(node);
-        let (_, idx) = self.add_child(square_tensor, Op::Square);
-        GraphTensor {
-            id: idx,
-            graph_ref: self.graph_ref,
-        }
-    }
-
-    pub fn matmul(&self, other: GraphTensor<T, U>) -> GraphTensor<T, U> {
-        let node = self.get_node_ref();
-        let other_node = other.get_node_ref();
-        let matmul_tensor = T::matmul(node, other_node);
-        let (_, idx) = self.add_child(matmul_tensor, Op::MatMul);
-        GraphTensor {
-            id: idx,
-            graph_ref: self.graph_ref,
-        }
-    }
-
     pub fn relu(&self) -> GraphTensor<T, U> {
         let node = self.get_node_ref();
         let relu_tensor = T::relu(node);
@@ -121,6 +90,38 @@ where
         let node = self.get_node_ref();
         let sigmoid_tensor = T::sigmoid(node);
         let (_, idx) = self.add_child(sigmoid_tensor, Op::Sigmoid);
+        GraphTensor {
+            id: idx,
+            graph_ref: self.graph_ref,
+        }
+    }
+
+    pub fn sqrt(&self) -> GraphTensor<T, U> {
+        let node = self.get_node_ref();
+        let sqrt_tensor = T::sqrt(node);
+        let (_, idx) = self.add_child(sqrt_tensor, Op::Sqrt);
+        GraphTensor {
+            id: idx,
+            graph_ref: self.graph_ref,
+        }
+    }
+
+    pub fn square(&self) -> GraphTensor<T, U> {
+        let node = self.get_node_ref();
+        let square_tensor = T::square(node);
+        let (_, idx) = self.add_child(square_tensor, Op::Square);
+        GraphTensor {
+            id: idx,
+            graph_ref: self.graph_ref,
+        }
+    }
+
+    pub fn matmul(&self, other: GraphTensor<T, U>) -> GraphTensor<T, U> {
+        let node = self.get_node_ref();
+        let other_node = other.get_node_ref();
+        let matmul_tensor = T::matmul(node, other_node);
+        // TODO: add edge to other tensor as well
+        let (_, idx) = self.add_child(matmul_tensor, Op::MatMul);
         GraphTensor {
             id: idx,
             graph_ref: self.graph_ref,

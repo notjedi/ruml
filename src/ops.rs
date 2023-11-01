@@ -15,10 +15,19 @@ pub enum Op {
     // UnaryOps
     Abs,
     Exp,
+    GeLU,
     Log,
     Negate,
+    ReLU,
+    SiLU,
+    Sigmoid,
     Sqrt,
     Square,
+
+    // UnaryOps with dim
+    Mean,
+    Norm,
+    Softmax,
     Sum,
 
     // BinaryOps
@@ -28,15 +37,7 @@ pub enum Op {
     Sub,
 
     // MlOps
-    GeLU,
     MatMul,
-    Mean,
-    Norm,
-    ReLU,
-    Scale,
-    SiLU,
-    Sigmoid,
-    Softmax,
 
     // ShapeOps
     Expand,
