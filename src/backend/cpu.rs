@@ -1,11 +1,14 @@
+use alloc::sync::Arc;
+use core::{
+    ops::Add,
+    simd::{f32x8, num::SimdFloat},
+};
+
 use aligned_vec::{avec, AVec};
 use rayon::prelude::{IntoParallelRefIterator, ParallelIterator};
 
 use super::Backend;
 use crate::{Shape, Tensor, CACHELINE_ALIGN};
-use alloc::sync::Arc;
-use core::ops::Add;
-use core::simd::{f32x8, SimdFloat};
 
 const CACHE_LINE_F32: usize = 16;
 

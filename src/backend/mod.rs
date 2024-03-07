@@ -1,5 +1,4 @@
 pub mod cpu;
-
 pub use cpu::AVX2Backend;
 
 use crate::{types::NumFloat, Tensor};

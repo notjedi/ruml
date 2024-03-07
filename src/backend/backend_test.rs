@@ -1,9 +1,9 @@
 use core::marker::PhantomData;
 
-use crate::{Shape, CACHELINE_ALIGN};
 use aligned_vec::AVec;
 
 use super::*;
+use crate::{Shape, CACHELINE_ALIGN};
 
 #[allow(non_camel_case_types)]
 pub struct tests<T, U>

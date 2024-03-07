@@ -1,13 +1,14 @@
 mod shape;
 pub use self::shape::{Shape, TensorIndexIterator};
 
-use aligned_vec::{avec, AVec};
-use alloc::{sync::Arc, vec::Vec};
+use alloc::sync::Arc;
 use core::{
     assert_eq,
     fmt::{Debug, Display},
     ops::{Add, Div, Mul, Neg, Sub},
 };
+
+use aligned_vec::{avec, AVec};
 use num_traits::Float;
 use rand::Rng;
 use rand_distr::{Distribution, StandardNormal};

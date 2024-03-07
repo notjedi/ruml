@@ -1,10 +1,5 @@
-use core::assert_eq;
-use core::panic;
-
-use alloc::format;
-use alloc::string::String;
-use alloc::vec;
-use alloc::vec::Vec;
+use alloc::{format, vec};
+use core::{assert_eq, panic};
 
 use crate::{assert_dim, assert_numel};
 

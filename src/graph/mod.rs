@@ -2,6 +2,7 @@ mod graph_tensor;
 pub use graph_tensor::GraphTensor;
 
 use core::marker::PhantomData;
+
 use daggy::Dag;
 use rand::Rng;
 use rand_distr::{Distribution, StandardNormal};
